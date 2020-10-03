@@ -13,7 +13,7 @@
 //!
 //! This channel is a multiple producers, multiple consumers channel. Copying
 //! [`Sender`](crate::Sender)s and
-//! [`Receiver`](crate::Receiver)(crate::Receiver)s is the cost of incrementing
+//! [`Receiver`](crate::Receiver)s is the cost of incrementing
 //! two atomic integers.
 //!
 //! With multiple [`Receiver`]s, however, some [`Receiver`]s might get the
