@@ -10,7 +10,7 @@ this is always the last sent value. Sending a new value overrides the
 previous message.</p>
 <p>This channel is a multiple producers, multiple consumers channel. Copying
 <a href="crate::Sender"><code>Sender</code></a>s and
-<a href="crate::Receiver"><code>Receiver</code></a>(crate::Receiver)s is the cost of incrementing
+<a href="crate::Receiver"><code>Receiver</code></a>s is the cost of incrementing
 two atomic integers.</p>
 <p>With multiple [<code>Receiver</code>]s, however, some [<code>Receiver</code>]s might get the
 message in a different order from which they asked for a message.</p>
