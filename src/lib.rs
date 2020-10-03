@@ -16,6 +16,9 @@
 //! [`Receiver`](crate::Receiver)(crate::Receiver)s is the cost of incrementing
 //! two atomic integers.
 //!
+//! With multiple [`Receiver`]s, however, some [`Receiver`]s might get the
+//! message in a different order from which they asked for a message.
+//!
 //! Perhaps this is not a good name. If you have any ideas, please, suggest it
 //! to me.
 
@@ -23,6 +26,9 @@ mod error;
 mod shared;
 mod sender;
 mod receiver;
+
+#[cfg(test)]
+mod test;
 
 pub use error::{NoReceivers, NoSenders};
 pub use receiver::Receiver;
