@@ -17,17 +17,17 @@ impl<T> Receiver<T> {
         Self { shared }
     }
 
-    /// Attempts to receive a message from the [`channel`](crate::channel)
+    /// Attempts to receive a message from the [`channel`][crate::channel]
     /// and takes it, but does not block if there are no messages.
     ///
     /// If there is a message, it is taken and returned wrapped inside
-    /// `Ok(Some(message))`, even if all [`Sender`](crate::sender::Sender)s
+    /// `Ok(Some(message))`, even if all [`Sender`][crate::sender::Sender]s
     /// have disconnected.
     ///
     /// If there are no messages, but there is at least one
-    /// [`Sender`](crate::sender::Sender) connected, it returns `Ok(None)`.
+    /// [`Sender`][crate::sender::Sender] connected, it returns `Ok(None)`.
     ///
-    /// If there no messages and no [`Sender`](crate::sender::Sender)s
+    /// If there no messages and no [`Sender`][crate::sender::Sender]s
     /// connected, it returns `Err(NoSenders)`.
     pub fn try_recv(&self) -> Result<Option<T>, NoSenders> {
         // Relaxed because `Arc` already does the job of synchronizing.
@@ -38,13 +38,13 @@ impl<T> Receiver<T> {
         }
     }
 
-    /// Receives a message from the [`channel`](crate::channel) and takes it.
+    /// Receives a message from the [`channel`][crate::channel] and takes it.
     ///
     /// While there are no messages, it will wait. If the sender has
     /// disconnected, it returns `Err(NoSenders)`.
     ///
     /// If there is a message, it returns `Ok(message)`, even if all
-    /// [`Sender`](crate::sender::Sender)s have disconnected.
+    /// [`Sender`][crate::sender::Sender]s have disconnected.
     pub async fn recv(&self) -> Result<T, NoSenders> {
         loop {
             if let Some(message) = self.try_recv()? {
