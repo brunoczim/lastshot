@@ -1,0 +1,16 @@
+language: rust
+os:
+  - linux
+
+script:
+  - cargo doc
+
+deploy:
+  provider: pages
+  token: $GITHUB_TOKEN
+  keep_history: true
+  local_dir: target/doc
+  skip_cleanup: true
+  on:
+    branch: master
+
