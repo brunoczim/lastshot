@@ -36,6 +36,12 @@
 <span id="36">36</span>
 <span id="37">37</span>
 <span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! This crate provides an asynchronous &quot;last-shot&quot; channel. A &quot;last-shot&quot;</span>
 <span class="doccomment">//! channel is a channel in which the receivers only receive the last message.</span>
@@ -55,6 +61,9 @@
 <span class="doccomment">//! [`Receiver`](crate::Receiver)(crate::Receiver)s is the cost of incrementing</span>
 <span class="doccomment">//! two atomic integers.</span>
 <span class="doccomment">//!</span>
+<span class="doccomment">//! With multiple [`Receiver`]s, however, some [`Receiver`]s might get the</span>
+<span class="doccomment">//! message in a different order from which they asked for a message.</span>
+<span class="doccomment">//!</span>
 <span class="doccomment">//! Perhaps this is not a good name. If you have any ideas, please, suggest it</span>
 <span class="doccomment">//! to me.</span>
 
@@ -62,6 +71,9 @@
 <span class="kw">mod</span> <span class="ident">shared</span>;
 <span class="kw">mod</span> <span class="ident">sender</span>;
 <span class="kw">mod</span> <span class="ident">receiver</span>;
+
+<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>
+<span class="kw">mod</span> <span class="ident">test</span>;
 
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">error</span>::{<span class="ident">NoReceivers</span>, <span class="ident">NoSenders</span>};
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">receiver</span>::<span class="ident">Receiver</span>;
