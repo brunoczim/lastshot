@@ -40,7 +40,7 @@
 <span class="kw">use</span> <span class="ident">std</span>::{<span class="ident">error</span>::<span class="ident">Error</span>, <span class="ident">fmt</span>};
 
 <span class="doccomment">/// Returned when there are no</span>
-<span class="doccomment">/// [`Receiver`](crate::receiver::Receiver)s</span>
+<span class="doccomment">/// [`Receiver`][crate::receiver::Receiver]s</span>
 <span class="doccomment">/// connected.</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">PartialEq</span>, <span class="ident">Eq</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">NoReceivers</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
@@ -48,7 +48,7 @@
     <span class="kw">pub</span> <span class="ident">attempt</span>: <span class="ident">T</span>,
     <span class="doccomment">/// The message stored in the channel that has never been read, and never</span>
     <span class="doccomment">/// will, since there are no</span>
-    <span class="doccomment">/// [`Receiver`](crate::receiver::Receiver)s.</span>
+    <span class="doccomment">/// [`Receiver`][crate::receiver::Receiver]s.</span>
     <span class="kw">pub</span> <span class="ident">unreceived</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>,
 }
 
@@ -60,7 +60,7 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Error</span> <span class="kw">for</span> <span class="ident">NoReceivers</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="kw">where</span> <span class="ident">T</span>: <span class="ident">fmt</span>::<span class="ident">Debug</span> {}
 
-<span class="doccomment">/// Returned when there are no [`Sender`](crate::sender::Sender)s connected.</span>
+<span class="doccomment">/// Returned when there are no [`Sender`][crate::sender::Sender]s connected.</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">PartialEq</span>, <span class="ident">Eq</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">NoSenders</span>;
 
