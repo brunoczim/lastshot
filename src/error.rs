@@ -2,13 +2,16 @@
 
 use std::{error::Error, fmt};
 
-/// Returned when there are no [`Receiver`](crate::Receiver)(crate::Receiver)s connected.
+/// Returned when there are no
+/// [`Receiver`](crate::receiver::Receiver)s
+/// connected.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NoReceivers<T> {
     /// The message that has been atttempted to be sent.
     pub attempt: T,
     /// The message stored in the channel that has never been read, and never
-    /// will, since there are no [`Receiver`](crate::Receiver)(crate::Receiver)s.
+    /// will, since there are no
+    /// [`Receiver`](crate::receiver::Receiver)s.
     pub unreceived: Option<T>,
 }
 
@@ -20,7 +23,7 @@ impl<T> fmt::Display for NoReceivers<T> {
 
 impl<T> Error for NoReceivers<T> where T: fmt::Debug {}
 
-/// Returned when there are no [`Sender`](crate::Sender)s connected.
+/// Returned when there are no [`Sender`](crate::sender::Sender)s connected.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NoSenders;
 
