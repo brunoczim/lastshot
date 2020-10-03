@@ -184,9 +184,28 @@
 <span id="184">184</span>
 <span id="185">185</span>
 <span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
 </pre><div class="example-wrap"><pre class="rust ">
-<span class="doccomment">//! This module provides the shared structure between [`Sender`](crate::Sender)s and</span>
-<span class="doccomment">//! [`Receiver`](crate::Receiver)(crate::Receiver)s.</span>
+<span class="doccomment">//! This module provides the shared structure between</span>
+<span class="doccomment">//! [`Sender`](crate::sender::Sender)s and</span>
+<span class="doccomment">//! [`Receiver`](crate::receiver::Receiver)s.</span>
 
 <span class="kw">use</span> <span class="ident">std</span>::{
     <span class="ident">collections</span>::<span class="ident">VecDeque</span>,
@@ -199,21 +218,27 @@
 };
 <span class="kw">use</span> <span class="ident">tokio</span>::<span class="ident">sync</span>::{<span class="ident">Mutex</span>, <span class="ident">MutexGuard</span>};
 
-<span class="doccomment">/// Shared structure between [`Sender`](crate::Sender)s and [`Receiver`](crate::Receiver)(crate::Receiver)s.</span>
+<span class="doccomment">/// Shared structure between [`Sender`](crate::sender::Sender)s and</span>
+<span class="doccomment">/// [`Receiver`](crate::receiver::Receiver)(crate::receiver::Receiver)s.</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Shared</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
     <span class="doccomment">/// Current message.</span>
     <span class="ident">message</span>: <span class="ident">AtomicPtr</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>,
-    <span class="doccomment">/// List of subscriptions of [`Receiver`](crate::Receiver)(crate::Receiver)s.</span>
+    <span class="doccomment">/// List of subscriptions of</span>
+    <span class="doccomment">/// [`Receiver`](crate::receiver::Receiver)(lastshot::</span>
+    <span class="doccomment">/// Receiver)s.</span>
     <span class="ident">subscriptions</span>: <span class="ident">Mutex</span><span class="op">&lt;</span><span class="ident">VecDeque</span><span class="op">&lt;</span><span class="ident">task</span>::<span class="ident">Waker</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-    <span class="doccomment">/// Count of connected [`Sender`](crate::Sender)s.</span>
+    <span class="doccomment">/// Count of connected [`Sender`](crate::sender::Sender)s.</span>
     <span class="ident">senders</span>: <span class="ident">AtomicUsize</span>,
-    <span class="doccomment">/// Count of connected [`Receiver`](crate::Receiver)(crate::Receiver)s.</span>
+    <span class="doccomment">/// Count of connected</span>
+    <span class="doccomment">/// [`Receiver`](crate::receiver::Receiver)(lastshot::</span>
+    <span class="doccomment">/// Receiver)s.</span>
     <span class="ident">receivers</span>: <span class="ident">AtomicUsize</span>,
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Shared</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
-    <span class="doccomment">/// Initializes this shared structure accounting one [`Sender`](crate::Sender) and one</span>
-    <span class="doccomment">/// [`Receiver`](crate::Receiver)(crate::Receiver).</span>
+    <span class="doccomment">/// Initializes this shared structure accounting one</span>
+    <span class="doccomment">/// [`Sender`](crate::sender::Sender) and one [`Receiver`](lastshot::</span>
+    <span class="doccomment">/// Receiver)(crate::receiver::Receiver).</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">one_sender_one_recv</span>() <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
         <span class="self">Self</span> {
             <span class="ident">message</span>: <span class="ident">AtomicPtr</span>::<span class="ident">new</span>(<span class="ident">null_mut</span>()),
@@ -246,27 +271,31 @@
         }
     }
 
-    <span class="doccomment">/// Returns how many [`Sender`](crate::Sender)s are connected.</span>
+    <span class="doccomment">/// Returns how many [`Sender`](crate::sender::Sender)s are connected.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">senders</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
         <span class="self">self</span>.<span class="ident">senders</span>.<span class="ident">load</span>(<span class="ident">Relaxed</span>)
     }
 
-    <span class="doccomment">/// Returns how many [`Receiver`](crate::Receiver)(crate::Receiver)s are connected.</span>
+    <span class="doccomment">/// Returns how many</span>
+    <span class="doccomment">/// [`Receiver`](crate::receiver::Receiver)(lastshot::</span>
+    <span class="doccomment">/// Receiver)s are connected.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">receivers</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
         <span class="self">self</span>.<span class="ident">receivers</span>.<span class="ident">load</span>(<span class="ident">Relaxed</span>)
     }
 
-    <span class="doccomment">/// Accounts that a new [`Sender`](crate::Sender)s connected.</span>
+    <span class="doccomment">/// Accounts that a new [`Sender`](crate::sender::Sender)s connected.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">sender_created</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="self">self</span>.<span class="ident">senders</span>.<span class="ident">fetch_add</span>(<span class="number">1</span>, <span class="ident">Relaxed</span>);
     }
 
-    <span class="doccomment">/// Accounts that a new [`Receiver`](crate::Receiver)(crate::Receiver)s connected.</span>
+    <span class="doccomment">/// Accounts that a new</span>
+    <span class="doccomment">/// [`Receiver`](crate::receiver::Receiver)(lastshot::</span>
+    <span class="doccomment">/// Receiver)s connected.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">receiver_created</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="self">self</span>.<span class="ident">receivers</span>.<span class="ident">fetch_add</span>(<span class="number">1</span>, <span class="ident">Relaxed</span>);
     }
 
-    <span class="doccomment">/// Accounts that a [`Sender`](crate::Sender)s disconnected.</span>
+    <span class="doccomment">/// Accounts that a [`Sender`](crate::sender::Sender)s disconnected.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">sender_dropped</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">let</span> <span class="ident">prev</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">senders</span>.<span class="ident">fetch_sub</span>(<span class="number">1</span>, <span class="ident">Relaxed</span>);
         <span class="kw">if</span> <span class="ident">prev</span> <span class="op">=</span><span class="op">=</span> <span class="number">1</span> {
@@ -274,13 +303,18 @@
         }
     }
 
-    <span class="doccomment">/// Accounts that a [`Receiver`](crate::Receiver)(crate::Receiver)s disconnected.</span>
+    <span class="doccomment">/// Accounts that a</span>
+    <span class="doccomment">/// [`Receiver`](crate::receiver::Receiver)(lastshot::</span>
+    <span class="doccomment">/// Receiver)s disconnected.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">receiver_dropped</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="self">self</span>.<span class="ident">receivers</span>.<span class="ident">fetch_sub</span>(<span class="number">1</span>, <span class="ident">Relaxed</span>);
     }
 
-    <span class="doccomment">/// Notifies one subscribed [`Receiver`](crate::Receiver)(crate::Receiver). If it is detected all [`Sender`](crate::Sender)s</span>
-    <span class="doccomment">/// disconnected, it will notify all of them.</span>
+    <span class="doccomment">/// Notifies one subscribed</span>
+    <span class="doccomment">/// [`Receiver`](crate::receiver::Receiver)(lastshot::</span>
+    <span class="doccomment">/// Receiver). If it is detected all</span>
+    <span class="doccomment">/// [`Sender`](crate::sender::Sender)s disconnected, it will notify</span>
+    <span class="doccomment">/// all of them.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">notify_one</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="kw-2">mut</span> <span class="ident">queue</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">subscriptions</span>.<span class="ident">try_lock</span>() {
             <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">waker</span>) <span class="op">=</span> <span class="ident">queue</span>.<span class="ident">pop_front</span>() {
@@ -293,7 +327,9 @@
         }
     }
 
-    <span class="doccomment">/// Notifies all subscribed [`Receiver`](crate::Receiver)(crate::Receiver)s.</span>
+    <span class="doccomment">/// Notifies all subscribed</span>
+    <span class="doccomment">/// [`Receiver`](crate::receiver::Receiver)(lastshot::</span>
+    <span class="doccomment">/// Receiver)s.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">notify_all</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="kw-2">mut</span> <span class="ident">queue</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">subscriptions</span>.<span class="ident">try_lock</span>() {
             <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">waker</span>) <span class="op">=</span> <span class="ident">queue</span>.<span class="ident">pop_front</span>() {

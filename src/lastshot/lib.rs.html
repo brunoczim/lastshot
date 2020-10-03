@@ -42,6 +42,7 @@
 <span id="42">42</span>
 <span id="43">43</span>
 <span id="44">44</span>
+<span id="45">45</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! This crate provides an asynchronous &quot;last-shot&quot; channel. A &quot;last-shot&quot;</span>
 <span class="doccomment">//! channel is a channel in which the receivers only receive the last message.</span>
@@ -49,7 +50,7 @@
 <span class="doccomment">//! This is similar to Tokio&#39;s [`watch`](tokio::sync::watch). However, Tokio&#39;s</span>
 <span class="doccomment">//! `watch` always contain a message, it is not possible to take it. You can</span>
 <span class="doccomment">//! still listen for updates, but no matter how many times you read, you won&#39;t</span>
-<span class="doccomment">//! take the value away. In fact, `tokio`s `watch` clones the message if you</span>
+<span class="doccomment">//! take the value away. In fact, `tokio`&#39;s `watch` clones the message if you</span>
 <span class="doccomment">//! need it borrowed.</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! `lastshot` on the other hand, always take a value away from the channel. And</span>
@@ -57,12 +58,13 @@
 <span class="doccomment">//! previous message.</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! This channel is a multiple producers, multiple consumers channel. Copying</span>
-<span class="doccomment">//! [`Sender`](crate::Sender)s and</span>
-<span class="doccomment">//! [`Receiver`](crate::Receiver)s is the cost of incrementing</span>
+<span class="doccomment">//! [`Sender`](crate::sender::Sender)s and</span>
+<span class="doccomment">//! [`Receiver`](crate::receiver::Receiver)s is the cost of incrementing</span>
 <span class="doccomment">//! two atomic integers.</span>
 <span class="doccomment">//!</span>
-<span class="doccomment">//! With multiple [`Receiver`]s, however, some [`Receiver`]s might get the</span>
-<span class="doccomment">//! message in a different order from which they asked for a message.</span>
+<span class="doccomment">//! With multiple [`Receiver`](crate::receiver::Receiver)s, however, some</span>
+<span class="doccomment">//! [`Receiver`](crate::receiver::Receiver)s might get the message in a</span>
+<span class="doccomment">//! different order from which they asked for a message.</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! Perhaps this is not a good name. If you have any ideas, please, suggest it</span>
 <span class="doccomment">//! to me.</span>
