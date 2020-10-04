@@ -9,3 +9,13 @@ edition = "2018"
 [dependencies.tokio]
 version = "^0.2.22"
 features = ["sync"]
+
+[dev-dependencies.tokio]
+version = "^0.2.22"
+features = [
+    "sync",
+    "rt-threaded",
+    "fs",
+    "time",
+    "macros"
+]
