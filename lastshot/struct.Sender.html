@@ -4,7 +4,7 @@ of cloning is the cost of incrementing two atomic variables. Sending a
 message always overwrite the previous message.</p>
 </div><h2 id='implementations' class='small-section-header'>Implementations<a href='#implementations' class='anchor'></a></h2><h3 id='impl' class='impl'><code class='in-band'>impl&lt;T&gt; <a class="struct" href="../lastshot/struct.Sender.html" title="struct lastshot::Sender">Sender</a>&lt;T&gt;</code><a href='#impl' class='anchor'></a><a class='srclink' href='../src/lastshot/sender.rs.html#15-42' title='goto source code'>[src]</a></h3><div class='impl-items'><h4 id='method.send' class="method"><code>pub fn <a href='#method.send' class='fnname'>send</a>(&amp;self, message: T) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;T&gt;, <a class="struct" href="../lastshot/struct.NoReceivers.html" title="struct lastshot::NoReceivers">NoReceivers</a>&lt;T&gt;&gt;</code><a class='srclink' href='../src/lastshot/sender.rs.html#31-41' title='goto source code'>[src]</a></h4><div class='docblock'><p>Sends a message through the channel. Sending a message always overwrite
 the previous message.</p>
-<p>If all [<code>Receiver</code>][crate::receiver::Receiver]s disconnected, it
+<p>If all <a href="crate::receiver::Receiver"><code>Receiver</code></a>s disconnected, it
 returns <code>Err(NoReceivers)</code>, and the error will contain:</p>
 <ul>
 <li>The parameter <code>message</code> that the caller attempted to send.</li>

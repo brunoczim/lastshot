@@ -97,17 +97,17 @@
         <span class="self">Self</span> { <span class="ident">shared</span> }
     }
 
-    <span class="doccomment">/// Attempts to receive a message from the [`channel`][crate::channel]</span>
+    <span class="doccomment">/// Attempts to receive a message from the [`channel`](crate::channel)</span>
     <span class="doccomment">/// and takes it, but does not block if there are no messages.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// If there is a message, it is taken and returned wrapped inside</span>
-    <span class="doccomment">/// `Ok(Some(message))`, even if all [`Sender`][crate::sender::Sender]s</span>
+    <span class="doccomment">/// `Ok(Some(message))`, even if all [`Sender`](crate::sender::Sender)s</span>
     <span class="doccomment">/// have disconnected.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// If there are no messages, but there is at least one</span>
-    <span class="doccomment">/// [`Sender`][crate::sender::Sender] connected, it returns `Ok(None)`.</span>
+    <span class="doccomment">/// [`Sender`](crate::sender::Sender) connected, it returns `Ok(None)`.</span>
     <span class="doccomment">///</span>
-    <span class="doccomment">/// If there no messages and no [`Sender`][crate::sender::Sender]s</span>
+    <span class="doccomment">/// If there no messages and no [`Sender`](crate::sender::Sender)s</span>
     <span class="doccomment">/// connected, it returns `Err(NoSenders)`.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">try_recv</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>, <span class="ident">NoSenders</span><span class="op">&gt;</span> {
         <span class="comment">// Relaxed because `Arc` already does the job of synchronizing.</span>
@@ -118,13 +118,13 @@
         }
     }
 
-    <span class="doccomment">/// Receives a message from the [`channel`][crate::channel] and takes it.</span>
+    <span class="doccomment">/// Receives a message from the [`channel`](crate::channel) and takes it.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// While there are no messages, it will wait. If the sender has</span>
     <span class="doccomment">/// disconnected, it returns `Err(NoSenders)`.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// If there is a message, it returns `Ok(message)`, even if all</span>
-    <span class="doccomment">/// [`Sender`][crate::sender::Sender]s have disconnected.</span>
+    <span class="doccomment">/// [`Sender`](crate::sender::Sender)s have disconnected.</span>
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">recv</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">NoSenders</span><span class="op">&gt;</span> {
         <span class="kw">loop</span> {
             <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">message</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">try_recv</span>()<span class="question-mark">?</span> {
