@@ -21,7 +21,7 @@ impl<T> Sender<T> {
     /// Sends a message through the channel. Sending a message always overwrite
     /// the previous message.
     ///
-    /// If all [`Receiver`][crate::receiver::Receiver]s disconnected, it
+    /// If all [`Receiver`](crate::receiver::Receiver)s disconnected, it
     /// returns `Err(NoReceivers)`, and the error will contain:
     /// - The parameter `message` that the caller attempted to send.
     /// - The value stored in the channel that has never been read, if any.

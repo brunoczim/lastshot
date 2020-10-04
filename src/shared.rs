@@ -1,6 +1,6 @@
 //! This module provides the shared structure between
-//! [`Sender`][crate::sender::Sender]s and
-//! [`Receiver`][crate::receiver::Receiver]s.
+//! [`Sender`](crate::sender::Sender)s and
+//! [`Receiver`](crate::receiver::Receiver)s.
 
 use std::{
     collections::VecDeque,
@@ -13,26 +13,26 @@ use std::{
 };
 use tokio::sync::{Mutex, MutexGuard};
 
-/// Shared structure between [`Sender`][crate::sender::Sender]s and
-/// [`Receiver`][crate::receiver::Receiver](crate::receiver::Receiver)s.
+/// Shared structure between [`Sender`](crate::sender::Sender)s and
+/// [`Receiver`](crate::receiver::Receiver)(crate::receiver::Receiver)s.
 pub struct Shared<T> {
     /// Current message.
     message: AtomicPtr<T>,
     /// List of subscriptions of
-    /// [`Receiver`][crate::receiver::Receiver](lastshot::
+    /// [`Receiver`](crate::receiver::Receiver)(lastshot::
     /// Receiver)s.
     subscriptions: Mutex<VecDeque<task::Waker>>,
-    /// Count of connected [`Sender`][crate::sender::Sender]s.
+    /// Count of connected [`Sender`](crate::sender::Sender)s.
     senders: AtomicUsize,
     /// Count of connected
-    /// [`Receiver`][crate::receiver::Receiver](lastshot::
+    /// [`Receiver`](crate::receiver::Receiver)(lastshot::
     /// Receiver)s.
     receivers: AtomicUsize,
 }
 
 impl<T> Shared<T> {
     /// Initializes this shared structure accounting one
-    /// [`Sender`][crate::sender::Sender] and one [`Receiver`](lastshot::
+    /// [`Sender`](crate::sender::Sender) and one [`Receiver`](lastshot::
     /// Receiver)(crate::receiver::Receiver).
     pub fn one_sender_one_recv() -> Self {
         Self {
@@ -66,31 +66,31 @@ impl<T> Shared<T> {
         }
     }
 
-    /// Returns how many [`Sender`][crate::sender::Sender]s are connected.
+    /// Returns how many [`Sender`](crate::sender::Sender)s are connected.
     pub fn senders(&self) -> usize {
         self.senders.load(Relaxed)
     }
 
     /// Returns how many
-    /// [`Receiver`][crate::receiver::Receiver](lastshot::
+    /// [`Receiver`](crate::receiver::Receiver)(lastshot::
     /// Receiver)s are connected.
     pub fn receivers(&self) -> usize {
         self.receivers.load(Relaxed)
     }
 
-    /// Accounts that a new [`Sender`][crate::sender::Sender]s connected.
+    /// Accounts that a new [`Sender`](crate::sender::Sender)s connected.
     pub fn sender_created(&self) {
         self.senders.fetch_add(1, Relaxed);
     }
 
     /// Accounts that a new
-    /// [`Receiver`][crate::receiver::Receiver](lastshot::
+    /// [`Receiver`](crate::receiver::Receiver)(lastshot::
     /// Receiver)s connected.
     pub fn receiver_created(&self) {
         self.receivers.fetch_add(1, Relaxed);
     }
 
-    /// Accounts that a [`Sender`][crate::sender::Sender]s disconnected.
+    /// Accounts that a [`Sender`](crate::sender::Sender)s disconnected.
     pub fn sender_dropped(&self) {
         let prev = self.senders.fetch_sub(1, Relaxed);
         if prev == 1 {
@@ -99,16 +99,16 @@ impl<T> Shared<T> {
     }
 
     /// Accounts that a
-    /// [`Receiver`][crate::receiver::Receiver](lastshot::
+    /// [`Receiver`](crate::receiver::Receiver)(lastshot::
     /// Receiver)s disconnected.
     pub fn receiver_dropped(&self) {
         self.receivers.fetch_sub(1, Relaxed);
     }
 
     /// Notifies one subscribed
-    /// [`Receiver`][crate::receiver::Receiver](lastshot::
+    /// [`Receiver`](crate::receiver::Receiver)(lastshot::
     /// Receiver). If it is detected all
-    /// [`Sender`][crate::sender::Sender]s disconnected, it will notify
+    /// [`Sender`](crate::sender::Sender)s disconnected, it will notify
     /// all of them.
     pub fn notify_one(&self) {
         if let Ok(mut queue) = self.subscriptions.try_lock() {
@@ -123,7 +123,7 @@ impl<T> Shared<T> {
     }
 
     /// Notifies all subscribed
-    /// [`Receiver`][crate::receiver::Receiver](lastshot::
+    /// [`Receiver`](crate::receiver::Receiver)(lastshot::
     /// Receiver)s.
     pub fn notify_all(&self) {
         if let Ok(mut queue) = self.subscriptions.try_lock() {
