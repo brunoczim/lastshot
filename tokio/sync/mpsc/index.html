@@ -36,7 +36,7 @@ are two situations to consider:</p>
 <p><strong>Bounded channel</strong>: If you need a bounded channel, you should use a bounded
 Tokio <code>mpsc</code> channel for both directions of communication. To call the async
 <a href="../../../tokio/sync/mpsc/struct.Sender.html#method.send"><code>send</code></a> or <a href="../../../tokio/sync/mpsc/struct.Receiver.html#method.recv"><code>recv</code></a> methods in sync code, you
-will need to use <a href="crate::runtime::Handle::block_on()"><code>Handle::block_on</code></a>, which allow you to execute an async
+will need to use <a href="../../../tokio/runtime/struct.Handle.html#method.block_on"><code>Handle::block_on</code></a>, which allow you to execute an async
 method in synchronous code. This is necessary because a bounded channel may
 need to wait for additional capacity to become available.</p>
 <p><strong>Unbounded channel</strong>: You should use the kind of channel that matches where
