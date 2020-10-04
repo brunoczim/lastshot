@@ -1,9 +1,17 @@
 language: rust
+rust:
+  - stable
+  - beta
+  - nightly
 os:
   - linux
 
+jobs:
+  allow_failures:
+    - rust: nightly
+
 script:
-  - cargo doc
+  - cargo test
 
 deploy:
   provider: pages
@@ -11,5 +19,8 @@ deploy:
   keep_history: true
   local_dir: target/doc
   skip_cleanup: true
+  script:
+    - cargo doc
   on:
     branch: main
+    rust: nightly
