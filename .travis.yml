@@ -1,7 +1,6 @@
 language: rust
 rust:
   - stable
-  - beta
   - nightly
 
 os:
@@ -10,6 +9,10 @@ os:
 
 env:
   - RUST_BACKTRACE=1
+
+jobs:
+  allow_failures:
+    - rust: nightly
 
 script:
   - cargo test --verbose
