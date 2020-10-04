@@ -3,24 +3,25 @@ rust:
   - stable
   - beta
   - nightly
+
 os:
   - linux
+  - windows
 
-jobs:
-  allow_failures:
-    - rust: nightly
+env:
+  - RUST_BACKTRACE=1
 
 script:
-  - cargo test
+  - cargo test --verbose
+  - cargo doc --verbose
 
 deploy:
   provider: pages
   token: $GITHUB_TOKEN
   keep_history: true
-  local_dir: target/doc
   skip_cleanup: true
-  script:
-    - cargo doc
+  local_dir: target/doc
   on:
     branch: main
+    os: linux
     rust: nightly
