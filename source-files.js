@@ -1,7 +1,7 @@
 var N = null;var sourcesIndex = {};
 sourcesIndex["bytes"] = {"name":"","dirs":[{"name":"buf","dirs":[{"name":"ext","files":["chain.rs","limit.rs","mod.rs","reader.rs","take.rs","writer.rs"]}],"files":["buf_impl.rs","buf_mut.rs","iter.rs","mod.rs","vec_deque.rs"]},{"name":"fmt","files":["debug.rs","hex.rs","mod.rs"]}],"files":["bytes.rs","bytes_mut.rs","lib.rs","loom.rs"]};
 sourcesIndex["fnv"] = {"name":"","files":["lib.rs"]};
-sourcesIndex["lastshot"] = {"name":"","files":["error.rs","lib.rs","receiver.rs","sender.rs","shared.rs"]};
+sourcesIndex["lastshot"] = {"name":"","dirs":[{"name":"mpsc","files":["error.rs","receiver.rs","sender.rs","shared.rs"]}],"files":["lib.rs","mpsc.rs"]};
 sourcesIndex["libc"] = {"name":"","dirs":[{"name":"unix","dirs":[{"name":"linux_like","dirs":[{"name":"linux","dirs":[{"name":"gnu","dirs":[{"name":"b64","dirs":[{"name":"x86_64","files":["align.rs","mod.rs","not_x32.rs"]}],"files":["mod.rs"]}],"files":["align.rs","mod.rs"]}],"files":["align.rs","mod.rs"]}],"files":["mod.rs"]}],"files":["align.rs","mod.rs"]}],"files":["fixed_width_ints.rs","lib.rs","macros.rs"]};
 sourcesIndex["memchr"] = {"name":"","dirs":[{"name":"x86","files":["avx.rs","mod.rs","sse2.rs"]}],"files":["fallback.rs","iter.rs","lib.rs","naive.rs"]};
 sourcesIndex["num_cpus"] = {"name":"","files":["lib.rs","linux.rs"]};
