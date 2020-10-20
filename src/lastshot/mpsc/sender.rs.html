@@ -97,15 +97,15 @@
     }
 
     <span class="doccomment">/// Sends a message through the channel. Sending a message always overwrite</span>
-    <span class="doccomment">/// the previous message.</span>
+    <span class="doccomment">/// the previous message (if not received).</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// If the [`Receiver`](crate::mpsc::Receiver) disconnected, it</span>
     <span class="doccomment">/// returns `Err(NoReceivers)`, and the error will contain:</span>
     <span class="doccomment">/// - The parameter `message` that the caller attempted to send.</span>
-    <span class="doccomment">/// - The value stored in the channel that has never been read, if any.</span>
+    <span class="doccomment">/// - The value stored in the channel that has never been received, if any.</span>
     <span class="doccomment">///</span>
-    <span class="doccomment">/// Otherwise, if there are receivers, it returns the previous message which</span>
-    <span class="doccomment">/// was never read wrapped inside `Ok(Some(message))`.</span>
+    <span class="doccomment">/// Otherwise, if the receiver is connected, it returns the previous message</span>
+    <span class="doccomment">/// if never received, wrapped inside `Ok(Some(message))`.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">send</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">message</span>: <span class="ident">T</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>, <span class="ident">NoReceivers</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span> {
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">shared</span>.<span class="ident">receiver</span>() {
             <span class="kw">let</span> <span class="ident">unreceived</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">shared</span>.<span class="ident">swap_message</span>(<span class="prelude-val">Some</span>(<span class="ident">message</span>));

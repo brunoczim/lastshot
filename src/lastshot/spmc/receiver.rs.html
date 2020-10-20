@@ -25,19 +25,47 @@
 <span id="22">22</span>
 <span id="23">23</span>
 <span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
 </pre><div class="example-wrap"><pre class="rust ">
+<span class="doccomment">//! This module defines the receiver of a SPMC channel.</span>
+
 <span class="kw">use</span> <span class="kw">crate</span>::{
     <span class="ident">error</span>::<span class="ident">NoSenders</span>,
     <span class="ident">spmc</span>::<span class="ident">shared</span>::{<span class="ident">ReceiverSubs</span>, <span class="ident">Shared</span>},
 };
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">sync</span>::<span class="ident">Arc</span>;
 
+<span class="doccomment">/// The receiver handle of a SPMC last-shot channel. Since the channel is a</span>
+<span class="doccomment">/// &quot;multi consumer&quot; channel (spMC), it is possible to clone this handle, but</span>
+<span class="doccomment">/// it requires a mutable reference. The cost of cloning involves incrementing</span>
+<span class="doccomment">/// an atomic variable and making a new small allocation.</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Receiver</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
+    <span class="doccomment">/// Structure shared with receiver.</span>
     <span class="ident">shared</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">Shared</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+    <span class="doccomment">/// The receiver handle to the subscription data it owns. To subscribe for</span>
+    <span class="doccomment">/// a new message, it uses this object.</span>
     <span class="ident">subs</span>: <span class="ident">ReceiverSubs</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>,
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Receiver</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
+    <span class="doccomment">/// Creates a new sender from the given shared structure ARC.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// # Safety</span>
+    <span class="doccomment">/// Safe if the shared structure can only be shared with the sender, and it</span>
+    <span class="doccomment">/// must control its presence flag correctly (while active set to 1).</span>
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">shared</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">Shared</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
         <span class="self">Self</span> { <span class="ident">shared</span>, <span class="ident">subs</span>: <span class="ident">ReceiverSubs</span>::<span class="ident">new</span>() }
     }
