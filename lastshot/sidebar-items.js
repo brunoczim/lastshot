@@ -1,1 +1,1 @@
-initSidebarItems({"mod":[["mpsc","A multi-producer single-consumer last-shot channel."]]});
+initSidebarItems({"mod":[["error","This module provides errors used by the channel."],["mpsc","A multi-producer single-consumer last-shot channel."],["spmc","A single-producer multi-consumer last-shot channel."]]});

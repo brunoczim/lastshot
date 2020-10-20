@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["channel","Creates a new single-producer multi-consumer (SPMC) \"last-shot\" channel."]],"struct":[["Receiver",""],["Sender",""]]});

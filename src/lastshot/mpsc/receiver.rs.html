@@ -93,10 +93,12 @@
 <span id="90">90</span>
 <span id="91">91</span>
 <span id="92">92</span>
+<span id="93">93</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! This module provides the receiver type.</span>
 
-<span class="kw">use</span> <span class="kw">super</span>::{<span class="ident">error</span>::<span class="ident">NoSenders</span>, <span class="ident">Shared</span>};
+<span class="kw">use</span> <span class="kw">super</span>::<span class="ident">Shared</span>;
+<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">error</span>::<span class="ident">NoSenders</span>;
 <span class="kw">use</span> <span class="ident">std</span>::{<span class="ident">fmt</span>, <span class="ident">future</span>::<span class="ident">Future</span>, <span class="ident">pin</span>::<span class="ident">Pin</span>, <span class="ident">sync</span>::<span class="ident">Arc</span>, <span class="ident">task</span>};
 
 <span class="doccomment">/// A receiver handle of a MPSC last-shot channel. It receives messages from the</span>

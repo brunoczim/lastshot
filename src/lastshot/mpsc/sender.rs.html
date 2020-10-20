@@ -73,10 +73,12 @@
 <span id="70">70</span>
 <span id="71">71</span>
 <span id="72">72</span>
+<span id="73">73</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! This module provides the receiver type.</span>
 
-<span class="kw">use</span> <span class="kw">super</span>::{<span class="ident">error</span>::<span class="ident">NoReceivers</span>, <span class="ident">Shared</span>};
+<span class="kw">use</span> <span class="kw">super</span>::<span class="ident">Shared</span>;
+<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">error</span>::<span class="ident">NoReceivers</span>;
 <span class="kw">use</span> <span class="ident">std</span>::{<span class="ident">fmt</span>, <span class="ident">sync</span>::<span class="ident">Arc</span>};
 
 <span class="doccomment">/// A sender handle of a MPSC last-shot channel. It sends messages messages from</span>

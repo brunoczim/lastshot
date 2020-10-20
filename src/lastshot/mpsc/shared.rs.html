@@ -158,6 +158,10 @@
 <span id="155">155</span>
 <span id="156">156</span>
 <span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! This module provides the shared structure between</span>
 <span class="doccomment">//! [`Sender`](crate::mpsc::Sender)s and a</span>
@@ -165,8 +169,9 @@
 
 <span class="kw">use</span> <span class="ident">std</span>::{
     <span class="ident">fmt</span>,
+    <span class="ident">marker</span>::<span class="ident">PhantomData</span>,
     <span class="ident">ptr</span>::<span class="ident">null_mut</span>,
-    <span class="ident">sync</span>::<span class="ident">atomic</span>::{<span class="ident">AtomicPtr</span>, <span class="ident">AtomicU8</span>, <span class="ident">AtomicUsize</span>, <span class="ident">Ordering</span>::<span class="kw-2">*</span>},
+    <span class="ident">sync</span>::<span class="ident">atomic</span>::{<span class="ident">AtomicBool</span>, <span class="ident">AtomicPtr</span>, <span class="ident">AtomicUsize</span>, <span class="ident">Ordering</span>::<span class="kw-2">*</span>},
     <span class="ident">task</span>,
 };
 
@@ -180,7 +185,9 @@
     <span class="doccomment">/// Number of [`Sender`](crate::mpsc::Sender)s active.</span>
     <span class="ident">senders</span>: <span class="ident">AtomicUsize</span>,
     <span class="doccomment">/// Whether [`Receiver`](crate::mpsc::Receiver) is active or not.</span>
-    <span class="ident">receiver</span>: <span class="ident">AtomicU8</span>,
+    <span class="ident">receiver</span>: <span class="ident">AtomicBool</span>,
+    <span class="doccomment">/// To say we own a `T`.</span>
+    <span class="ident">_marker</span>: <span class="ident">PhantomData</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>,
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Shared</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
@@ -192,7 +199,8 @@
             <span class="ident">message</span>: <span class="ident">AtomicPtr</span>::<span class="ident">new</span>(<span class="ident">null_mut</span>()),
             <span class="ident">subscription</span>: <span class="ident">AtomicPtr</span>::<span class="ident">new</span>(<span class="ident">null_mut</span>()),
             <span class="ident">senders</span>: <span class="ident">AtomicUsize</span>::<span class="ident">new</span>(<span class="number">1</span>),
-            <span class="ident">receiver</span>: <span class="ident">AtomicU8</span>::<span class="ident">new</span>(<span class="number">1</span>),
+            <span class="ident">receiver</span>: <span class="ident">AtomicBool</span>::<span class="ident">new</span>(<span class="bool-val">true</span>),
+            <span class="ident">_marker</span>: <span class="ident">PhantomData</span>,
         }
     }
 
@@ -257,7 +265,7 @@
 
     <span class="doccomment">/// Returns whether the [`Receiver`](crate::mpsc::Receiver) is active.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">receiver</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">bool</span> {
-        <span class="self">self</span>.<span class="ident">receiver</span>.<span class="ident">load</span>(<span class="ident">Relaxed</span>) <span class="op">=</span><span class="op">=</span> <span class="number">1</span>
+        <span class="self">self</span>.<span class="ident">receiver</span>.<span class="ident">load</span>(<span class="ident">Relaxed</span>)
     }
 
     <span class="doccomment">/// Registers a sender as dropped. Returns how many</span>
@@ -268,7 +276,7 @@
 
     <span class="doccomment">/// Registers the [`Receiver`](crate::mpsc::Receiver) as dropped.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">drop_receiver</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="self">self</span>.<span class="ident">receiver</span>.<span class="ident">store</span>(<span class="number">0</span>, <span class="ident">Relaxed</span>);
+        <span class="self">self</span>.<span class="ident">receiver</span>.<span class="ident">store</span>(<span class="bool-val">false</span>, <span class="ident">Relaxed</span>);
     }
 }
 
