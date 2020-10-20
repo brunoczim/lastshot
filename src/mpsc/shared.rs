@@ -4,8 +4,9 @@
 
 use std::{
     fmt,
+    marker::PhantomData,
     ptr::null_mut,
-    sync::atomic::{AtomicPtr, AtomicU8, AtomicUsize, Ordering::*},
+    sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering::*},
     task,
 };
 
@@ -19,7 +20,9 @@ pub struct Shared<T> {
     /// Number of [`Sender`](crate::mpsc::Sender)s active.
     senders: AtomicUsize,
     /// Whether [`Receiver`](crate::mpsc::Receiver) is active or not.
-    receiver: AtomicU8,
+    receiver: AtomicBool,
+    /// To say we own a `T`.
+    _marker: PhantomData<T>,
 }
 
 impl<T> Shared<T> {
@@ -31,7 +34,8 @@ impl<T> Shared<T> {
             message: AtomicPtr::new(null_mut()),
             subscription: AtomicPtr::new(null_mut()),
             senders: AtomicUsize::new(1),
-            receiver: AtomicU8::new(1),
+            receiver: AtomicBool::new(true),
+            _marker: PhantomData,
         }
     }
 
@@ -96,7 +100,7 @@ impl<T> Shared<T> {
 
     /// Returns whether the [`Receiver`](crate::mpsc::Receiver) is active.
     pub fn receiver(&self) -> bool {
-        self.receiver.load(Relaxed) == 1
+        self.receiver.load(Relaxed)
     }
 
     /// Registers a sender as dropped. Returns how many
@@ -107,7 +111,7 @@ impl<T> Shared<T> {
 
     /// Registers the [`Receiver`](crate::mpsc::Receiver) as dropped.
     pub fn drop_receiver(&self) {
-        self.receiver.store(0, Relaxed);
+        self.receiver.store(false, Relaxed);
     }
 }
 

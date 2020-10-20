@@ -1,6 +1,5 @@
 //! A multi-producer single-consumer last-shot channel.
 
-mod error;
 mod shared;
 mod sender;
 mod receiver;
@@ -8,7 +7,6 @@ mod receiver;
 #[cfg(test)]
 mod test;
 
-pub use error::{NoReceivers, NoSenders};
 pub use receiver::Receiver;
 pub use sender::Sender;
 use shared::Shared;

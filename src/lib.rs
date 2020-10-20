@@ -16,4 +16,6 @@
 //! Perhaps this is not a good name. If you have any ideas, please, suggest it
 //! to me.
 
+pub mod error;
 pub mod mpsc;
+pub mod spmc;

@@ -1,6 +1,7 @@
 //! This module provides the receiver type.
 
-use super::{error::NoReceivers, Shared};
+use super::Shared;
+use crate::error::NoReceivers;
 use std::{fmt, sync::Arc};
 
 /// A sender handle of a MPSC last-shot channel. It sends messages messages from
