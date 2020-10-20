@@ -20,15 +20,15 @@ impl<T> Sender<T> {
     }
 
     /// Sends a message through the channel. Sending a message always overwrite
-    /// the previous message.
+    /// the previous message (if not received).
     ///
     /// If the [`Receiver`](crate::mpsc::Receiver) disconnected, it
     /// returns `Err(NoReceivers)`, and the error will contain:
     /// - The parameter `message` that the caller attempted to send.
-    /// - The value stored in the channel that has never been read, if any.
+    /// - The value stored in the channel that has never been received, if any.
     ///
-    /// Otherwise, if there are receivers, it returns the previous message which
-    /// was never read wrapped inside `Ok(Some(message))`.
+    /// Otherwise, if the receiver is connected, it returns the previous message
+    /// if never received, wrapped inside `Ok(Some(message))`.
     pub fn send(&self, message: T) -> Result<Option<T>, NoReceivers<T>> {
         if self.shared.receiver() {
             let unreceived = self.shared.swap_message(Some(message));
