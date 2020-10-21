@@ -118,6 +118,8 @@ impl<T> ReceiverSubs<T> {
 
     /// Returns a reference to the subscription data.
     pub fn data(&self) -> &SubsData<T> {
+        // Safe because we only allocate the pointer through `Box` and never get
+        // it from outside.
         unsafe { self.data.as_ref() }
     }
 
@@ -133,6 +135,7 @@ impl<T> ReceiverSubs<T> {
 
 impl<T> Drop for ReceiverSubs<T> {
     fn drop(&mut self) {
+        // Safe because we don't use the contents of the data.
         unsafe {
             if self.data().drop_handle() {
                 Box::from_raw(self.data.as_ptr());
@@ -156,6 +159,10 @@ impl<T> fmt::Debug for SenderSubs<T> {
 impl<T> SenderSubs<T> {
     /// Creates a sender subscription data from a raw, non-null pointer to the
     /// data.
+    ///
+    /// # Safety
+    /// Safe if the pointer `data` was obtained by [`SenderSubs::into_raw`], and
+    /// the pointer has not been used with this method since then.
     pub unsafe fn from_raw(data: NonNull<SubsData<T>>) -> Self {
         Self { data }
     }
@@ -170,6 +177,9 @@ impl<T> SenderSubs<T> {
 
     /// Returns a reference to the subscription data.
     pub fn data(&self) -> &SubsData<T> {
+        // Safe because we only allocate the pointer through `Box` and even when
+        // we get it from outside, it must have been obtained from
+        // [`SenderSubs::into_raw`].
         unsafe { self.data.as_ref() }
     }
 
@@ -189,6 +199,7 @@ impl<T> SenderSubs<T> {
 
 impl<T> Drop for SenderSubs<T> {
     fn drop(&mut self) {
+        // Safe because we don't use the contents of the data.
         unsafe {
             if self.data().drop_handle() {
                 Box::from_raw(self.data.as_ptr());
