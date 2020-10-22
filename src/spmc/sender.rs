@@ -4,6 +4,7 @@ use crate::{
     error::NoReceivers,
     spmc::shared::{
         Node,
+        NodeData,
         NodeDataPtr,
         OrphanData,
         SenderSubs,
@@ -12,6 +13,7 @@ use crate::{
     },
 };
 use std::{
+    fmt,
     ptr::NonNull,
     sync::{atomic::Ordering::*, Arc},
 };
@@ -53,25 +55,45 @@ impl<T> Sender<T> {
     /// Otherwise, if there are receivers, it returns the previous message if
     /// never received, wrapped inside `Ok(Some(message))`.
     pub fn send(&mut self, message: T) -> Result<Option<T>, NoReceivers<T>> {
-        if self.shared.receivers() == 0 {
+        let node_data = self.clear_unused_nodes();
+        if !node_data.connected {
             // Safe because there are no receivers connected.
-            let unreceived = unsafe { self.take_unreceived() };
+            let unreceived = unsafe { self.take_unreceived(node_data.ptr) };
             Err(NoReceivers { attempt: message, unreceived })?
+        } else if node_data.ptr.is_null() {
+            let msg_alloc = Self::make_orphan(message);
+
+            // Safe because we won't use msg_alloc in case of error,
+            // while prev_msg_ptr is always discarded. Also,
+            // prev_msg_ptr was acquired from the front. Msg_alloc was
+            // allocated by a Box, and the box is leaked.
+            let res = unsafe { self.send_through_orphan(None, msg_alloc) };
+            match res {
+                Ok(unreceived) => Ok(unreceived),
+
+                // Safe because Msg_alloc was allocated by a leaked Box,
+                // and data_ptr was acquired from the front's first
+                // node's data. Also, we use neither of these pointers
+                // after we call the function.
+                Err(node_data) => unsafe {
+                    self.send_loop(node_data, msg_alloc)
+                },
+            }
         } else {
-            match self.clear_unused_nodes() {
+            match node_data.ptr {
                 NodeDataPtr::Orphan(prev_msg_ptr) => {
-                    let msg_box = Box::new(OrphanData { message });
-                    let msg_alloc = NonNull::from(Box::leak(msg_box));
+                    let msg_alloc = Self::make_orphan(message);
+                    let prev_nonnull = NonNull::new(prev_msg_ptr);
 
                     // Safe because we won't use msg_alloc in case of error,
                     // while prev_msg_ptr is always discarded. Also,
                     // prev_msg_ptr was acquired from the front. Msg_alloc was
                     // allocated by a Box, and the box is leaked.
                     let res = unsafe {
-                        self.send_through_orphan(prev_msg_ptr, msg_alloc)
+                        self.send_through_orphan(prev_nonnull, msg_alloc)
                     };
                     match res {
-                        Ok(unreceived) => Ok(Some(unreceived)),
+                        Ok(unreceived) => Ok(unreceived),
 
                         // Safe because Msg_alloc was allocated by a leaked Box,
                         // and data_ptr was acquired from the front's first
@@ -108,7 +130,9 @@ impl<T> Sender<T> {
         subs_data: *mut SubsData<T>,
         message: T,
     ) {
-        self.front_ref().data.store(NodeDataPtr::<T>::null().encode(), Release);
+        let null = NodeDataPtr::<T>::null();
+        let node_data = NodeData { ptr: null, connected: true };
+        self.front_ref().data.store(node_data.encode(), Release);
         let nonnull = NonNull::new_unchecked(subs_data);
         SenderSubs::from_raw(nonnull).send(message);
     }
@@ -125,23 +149,28 @@ impl<T> Sender<T> {
     /// should be used by the sender after this function is called.
     unsafe fn send_through_orphan(
         &mut self,
-        expected: *mut OrphanData<T>,
+        expected: Option<NonNull<OrphanData<T>>>,
         msg_alloc: NonNull<OrphanData<T>>,
-    ) -> Result<T, NodeDataPtr<T>> {
-        let new_data_ptr = NodeDataPtr::Orphan(msg_alloc.as_ptr());
+    ) -> Result<Option<T>, NodeData<T>> {
+        let node_data_ptr = expected.map_or(NodeDataPtr::null(), |nonnull| {
+            NodeDataPtr::Orphan(nonnull.as_ptr())
+        });
+        let node_data = NodeData { ptr: node_data_ptr, connected: true };
+        let new_ptr = NodeDataPtr::Orphan(msg_alloc.as_ptr());
+        let new_node_data = NodeData { ptr: new_ptr, connected: true };
         let res = self.front_ref().data.compare_exchange(
-            NodeDataPtr::Orphan(expected).encode(),
-            new_data_ptr.encode(),
+            node_data.encode(),
+            new_node_data.encode(),
             AcqRel,
             Relaxed,
         );
 
         match res {
-            Ok(_) => {
-                let boxed = Box::from_raw(expected);
-                Ok(boxed.message)
-            },
-            Err(bits) => Err(NodeDataPtr::decode(bits)),
+            Ok(_) => Ok(expected.map(|nonnull| {
+                let boxed = Box::from_raw(nonnull.as_ptr());
+                boxed.message
+            })),
+            Err(bits) => Err(NodeData::decode(bits)),
         }
     }
 
@@ -158,32 +187,41 @@ impl<T> Sender<T> {
     /// should be used by the sender after this function is called.
     unsafe fn send_loop(
         &mut self,
-        mut data_ptr: NodeDataPtr<T>,
+        mut node_data: NodeData<T>,
         msg_alloc: NonNull<OrphanData<T>>,
     ) -> Result<Option<T>, NoReceivers<T>> {
         loop {
-            match data_ptr {
-                NodeDataPtr::Subs(subs_data) => {
-                    let msg_box = Box::from_raw(msg_alloc.as_ptr());
-                    let message = msg_box.message;
-                    self.send_through_subs(subs_data, message);
-                    break Ok(None);
-                },
-
-                NodeDataPtr::Orphan(prev_msg_ptr) => {
-                    let res = self.send_through_orphan(prev_msg_ptr, msg_alloc);
-                    match res {
-                        Ok(prev_msg) => break Ok(Some(prev_msg)),
-                        Err(update) => data_ptr = update,
-                    }
-                },
-            }
-
-            if self.shared.receivers() == 0 {
+            if !node_data.connected {
                 let msg_box = Box::from_raw(msg_alloc.as_ptr());
                 let message = msg_box.message;
-                let unreceived = self.take_unreceived();
+                let unreceived = self.take_unreceived(node_data.ptr);
                 Err(NoReceivers { attempt: message, unreceived })?
+            } else if node_data.ptr.is_null() {
+                let res = self.send_through_orphan(None, msg_alloc);
+                match res {
+                    Ok(nothing) => break Ok(nothing),
+                    Err(update) => node_data = update,
+                }
+            } else {
+                match node_data.ptr {
+                    NodeDataPtr::Orphan(prev_msg) => {
+                        let res = self.send_through_orphan(
+                            NonNull::new(prev_msg),
+                            msg_alloc,
+                        );
+                        match res {
+                            Ok(unreceived) => break Ok(unreceived),
+                            Err(update) => node_data = update,
+                        }
+                    },
+
+                    NodeDataPtr::Subs(subs_data) => {
+                        let msg_box = Box::from_raw(msg_alloc.as_ptr());
+                        let message = msg_box.message;
+                        self.send_through_subs(subs_data, message);
+                        break Ok(None);
+                    },
+                }
             }
         }
     }
@@ -206,18 +244,21 @@ impl<T> Sender<T> {
     /// Returns an unreceived message, if there is one.
     ///
     /// # Safety
-    /// All receivers must have disconnected.
-    unsafe fn take_unreceived(&mut self) -> Option<T> {
-        let data_ptr = self.clear_unused_nodes();
-
+    /// `data_ptr` must have been loaded from the subscription queue's front.
+    /// All receivers must have disconnected before loading `data_ptr`.
+    unsafe fn take_unreceived(
+        &mut self,
+        data_ptr: NodeDataPtr<T>,
+    ) -> Option<T> {
         if data_ptr.is_null() {
             None
         } else {
             match data_ptr {
                 NodeDataPtr::Subs(_) => None,
                 NodeDataPtr::Orphan(ptr) => {
-                    let null = NodeDataPtr::<T>::null().encode();
-                    *self.front_mut().data.get_mut() = null;
+                    let null = NodeDataPtr::<T>::null();
+                    let node_data = NodeData { ptr: null, connected: false };
+                    *self.front_mut().data.get_mut() = node_data.encode();
                     Some(Box::from_raw(ptr).message)
                 },
             }
@@ -231,13 +272,13 @@ impl<T> Sender<T> {
     /// - Or it is the last node.
     ///
     /// Otherwise, it is unused.
-    fn clear_unused_nodes(&mut self) -> NodeDataPtr<T> {
+    fn clear_unused_nodes(&mut self) -> NodeData<T> {
         loop {
             let front = self.front_ref();
-            let data_ptr = NodeDataPtr::<T>::decode(front.data.load(Acquire));
+            let node_data = NodeData::<T>::decode(front.data.load(Acquire));
 
-            if !data_ptr.is_null() {
-                break data_ptr;
+            if !node_data.ptr.is_null() {
+                break node_data;
             }
 
             let maybe_next = NonNull::new(front.next.load(Acquire));
@@ -250,8 +291,26 @@ impl<T> Sender<T> {
                     }
                     self.front = next;
                 },
-                None => break data_ptr,
+                None => break node_data,
             }
         }
     }
+
+    fn make_orphan(message: T) -> NonNull<OrphanData<T>> {
+        let msg_box = Box::new(OrphanData { message });
+        NonNull::from(Box::leak(msg_box))
+    }
+}
+
+impl<T> fmt::Debug for Sender<T> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_struct("Sender")
+            .field("shared", &self.shared)
+            .field("front", &self.front)
+            .finish()
+    }
+}
+
+impl<T> Drop for Sender<T> {
+    fn drop(&mut self) {}
 }

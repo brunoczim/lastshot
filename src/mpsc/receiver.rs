@@ -30,7 +30,7 @@ impl<T> Receiver<T> {
     /// If there no messages and no [`Sender`](crate::mpsc::Sender)s
     /// connected, it returns `Err(NoSenders)`.
     pub fn try_recv(&mut self) -> Result<Option<T>, NoSenders> {
-        if self.shared.senders() > 0 {
+        if self.shared.connected().senders > 0 {
             Ok(self.shared.swap_message(None))
         } else {
             Err(NoSenders)

@@ -30,7 +30,7 @@ impl<T> Sender<T> {
     /// Otherwise, if the receiver is connected, it returns the previous message
     /// if never received, wrapped inside `Ok(Some(message))`.
     pub fn send(&self, message: T) -> Result<Option<T>, NoReceivers<T>> {
-        if self.shared.receiver() {
+        if self.shared.connected().receiver {
             let unreceived = self.shared.swap_message(Some(message));
             self.notify();
             Ok(unreceived)
@@ -65,8 +65,7 @@ impl<T> Clone for Sender<T> {
 
 impl<T> Drop for Sender<T> {
     fn drop(&mut self) {
-        self.shared.drop_sender();
-        if self.shared.receiver() {
+        if self.shared.drop_sender().receiver {
             self.notify();
         }
     }

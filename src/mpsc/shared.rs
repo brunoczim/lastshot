@@ -6,9 +6,15 @@ use std::{
     fmt,
     marker::PhantomData,
     ptr::null_mut,
-    sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering::*},
+    sync::atomic::{AtomicPtr, AtomicUsize, Ordering::*},
     task,
 };
+
+/// Mask used to select a receiver bit in Connected.
+const RECEIVER_MASK: usize = !SENDERS_MASK;
+///
+/// Mask used to select senders bits in Connected.
+const SENDERS_MASK: usize = !0 >> 1;
 
 /// Shared structure between [`Sender`](crate::mpsc::Sender)s and a
 /// [`Receiver`](crate::mpsc::Receiver).
@@ -17,10 +23,9 @@ pub struct Shared<T> {
     message: AtomicPtr<T>,
     /// Subscriptions of a [`Receiver`](crate::mpsc::Receiver).
     subscription: AtomicPtr<task::Waker>,
-    /// Number of [`Sender`](crate::mpsc::Sender)s active.
-    senders: AtomicUsize,
-    /// Whether [`Receiver`](crate::mpsc::Receiver) is active or not.
-    receiver: AtomicBool,
+    /// Number of [`Sender`](crate::mpsc::Sender)s active and if the
+    /// [`Receiver`](crate::mpsc::Receiver) is active.
+    connected: AtomicUsize,
     /// To say we own a `T`.
     _marker: PhantomData<T>,
 }
@@ -30,11 +35,11 @@ impl<T> Shared<T> {
     /// [`Sender`](crate::mpsc::Sender) and one
     /// [`Receiver`](crate::mpsc::Receiver).
     pub fn one_sender() -> Self {
+        let connected = Connected { senders: 1, receiver: true };
         Self {
             message: AtomicPtr::new(null_mut()),
             subscription: AtomicPtr::new(null_mut()),
-            senders: AtomicUsize::new(1),
-            receiver: AtomicBool::new(true),
+            connected: AtomicUsize::new(connected.encode()),
             _marker: PhantomData,
         }
     }
@@ -88,30 +93,38 @@ impl<T> Shared<T> {
         }
     }
 
+    /// Returns info about the connection of the
+    /// [`Sender`](crate::mpsc::Sender)s and the
+    /// [`Receiver`](crate::mpsc::Receiver).
+    pub fn connected(&self) -> Connected {
+        Connected::decode(self.connected.load(Relaxed))
+    }
+
     /// Registers a [`Sender`](crate::mpsc::Sender) as created.
-    pub fn create_sender(&self) {
-        self.senders.fetch_add(1, Relaxed);
+    pub fn create_sender(&self) -> Connected {
+        let mut connected =
+            Connected::decode(self.connected.fetch_add(1, Relaxed));
+        connected.senders += 1;
+        connected
     }
 
-    /// Return how many [`Sender`](crate::mpsc::Sender)s are active.
-    pub fn senders(&self) -> usize {
-        self.senders.load(Relaxed)
+    /// Registers a [`Sender`](crate::mpsc::Sender) as dropped. Returns
+    /// connected data after accouting the drop.
+    pub fn drop_sender(&self) -> Connected {
+        let mut connected =
+            Connected::decode(self.connected.fetch_sub(1, Relaxed));
+        connected.senders -= 1;
+        connected
     }
 
-    /// Returns whether the [`Receiver`](crate::mpsc::Receiver) is active.
-    pub fn receiver(&self) -> bool {
-        self.receiver.load(Relaxed)
-    }
+    /// Registers the [`Receiver`](crate::mpsc::Receiver) as dropped. Returns
+    /// connected data after accouting the drop.
 
-    /// Registers a sender as dropped. Returns how many
-    /// [`Sender`](crate::mpsc::Sender)s are active.
-    pub fn drop_sender(&self) -> usize {
-        self.senders.fetch_sub(1, Relaxed) - 1
-    }
-
-    /// Registers the [`Receiver`](crate::mpsc::Receiver) as dropped.
-    pub fn drop_receiver(&self) {
-        self.receiver.store(false, Relaxed);
+    pub fn drop_receiver(&self) -> Connected {
+        let bits = self.connected.fetch_and(!RECEIVER_MASK, Relaxed);
+        let mut connected = Connected::decode(bits);
+        connected.receiver = false;
+        connected
     }
 }
 
@@ -124,10 +137,10 @@ unsafe impl<T> Sync for Shared<T> where T: Send {}
 
 impl<T> fmt::Debug for Shared<T> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        let connected = Connected::decode(self.connected.load(Relaxed));
         fmt.debug_struct("lastshot::Shared")
             .field("message", &self.message)
-            .field("senders", &self.senders)
-            .field("receiver", &self.receiver)
+            .field("connected", &connected)
             .finish()
     }
 }
@@ -157,5 +170,31 @@ impl<T> Drop for Shared<T> {
                 Box::from_raw(ptr);
             }
         }
+    }
+}
+
+/// Info about the connection of the [`Sender`](crate::mpsc::Sender)s and the
+/// [`Receiver`](crate::mpsc::Receiver).
+#[derive(Debug, Clone, Copy)]
+pub struct Connected {
+    /// How many senders are active.
+    pub senders: usize,
+    /// Whether the receiver is active.
+    pub receiver: bool,
+}
+
+impl Connected {
+    /// Decodes connection info from bits.
+    fn decode(bits: usize) -> Self {
+        Self {
+            receiver: bits & RECEIVER_MASK != 0,
+            senders: bits & SENDERS_MASK,
+        }
+    }
+
+    /// Encodes connection info into bits.
+    fn encode(self) -> usize {
+        let receiver = if self.receiver { RECEIVER_MASK } else { 0 };
+        receiver | self.senders
     }
 }

@@ -24,11 +24,8 @@ const WAKER_BIT: u8 = 1 << 6;
 
 /// A pointer stored in a node to refer to its data.
 pub enum NodeDataPtr<T> {
-    /// This is a pointer to an orphan node's data. Must be aligned or else
-    /// Undefined Behaviour.
     Orphan(*mut OrphanData<T>),
-    /// This is a pointer to a subscription node's data. Must be aligned or
-    /// else Undefined Behaviour.
+    /// This is a pointer to a subscription node's data. Must be aligned.
     Subs(*mut SubsData<T>),
 }
 
@@ -57,7 +54,7 @@ impl<T> fmt::Debug for NodeDataPtr<T> {
 }
 
 impl<T> NodeDataPtr<T> {
-    /// Convenice method for creating a null pointer.
+    /// Convenience method for creating a null pointer.
     ///
     /// # Panic
     /// Panics if the actual null pointer is not aligned for an alignment of 2.
@@ -74,22 +71,54 @@ impl<T> NodeDataPtr<T> {
             NodeDataPtr::Subs(ptr) => ptr.is_null(),
         }
     }
+}
 
-    /// Encodes this pointer in bits.
+/// A node data, stored in [`Node`]'s `data` field.
+pub struct NodeData<T> {
+    /// The pointer to the actual node data.
+    pub ptr: NodeDataPtr<T>,
+    /// Whether all sides are connected.
+    pub connected: bool,
+}
+
+impl<T> NodeData<T> {
+    /// Encodes this node data in bits.
     pub fn encode(self) -> usize {
-        match self {
+        let connected = self.connected as usize;
+        let ptr = match self.ptr {
             NodeDataPtr::Orphan(ptr) => ptr as usize,
-            NodeDataPtr::Subs(ptr) => ptr as usize | 1,
-        }
+            NodeDataPtr::Subs(ptr) => ptr as usize | 2,
+        };
+
+        ptr | connected
     }
 
-    /// Decodes bits into a node data pointer.
+    /// Decodes bits into a node data.
     pub fn decode(bits: usize) -> Self {
-        if bits & 1 == 0 {
-            NodeDataPtr::Orphan(bits as *mut _)
+        let connected = bits & 1 == 0;
+        let ptr = if bits & 2 == 0 {
+            NodeDataPtr::Orphan((bits & !3) as *mut _)
         } else {
-            NodeDataPtr::Subs((bits & !1) as *mut _)
-        }
+            NodeDataPtr::Subs((bits & !3) as *mut _)
+        };
+        Self { ptr, connected }
+    }
+}
+
+impl<T> Clone for NodeData<T> {
+    fn clone(&self) -> Self {
+        Self { ptr: self.ptr, connected: self.connected }
+    }
+}
+
+impl<T> Copy for NodeData<T> {}
+
+impl<T> fmt::Debug for NodeData<T> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_struct("NodeData")
+            .field("ptr", &self.ptr)
+            .field("connected", &self.connected)
+            .finish()
     }
 }
 
@@ -210,7 +239,7 @@ impl<T> Drop for SenderSubs<T> {
 
 /// An orphan node's data. An orphan node is a node whose message is not owned
 /// by a subscribed task (i.e. not received).
-#[repr(align(/* at least */ 2))]
+#[repr(align(/* at least */ 4))]
 #[derive(Debug)]
 pub struct OrphanData<T> {
     /// The message contents.
@@ -219,7 +248,7 @@ pub struct OrphanData<T> {
 
 /// A subscription node's data. A subscription node is a node whose message is
 /// owned by a subscribed task (i.e. received).
-#[repr(align(/* at least */ 2))]
+#[repr(align(/* at least */ 4))]
 pub struct SubsData<T> {
     /// The waker. Potentially uninitialized. While subscribed, should be
     /// initialized by the receiver to be consumed by the sender. That is, when
@@ -311,8 +340,10 @@ impl<T> fmt::Debug for Shared<T> {
 impl<T> Shared<T> {
     /// Creates a shared structure
     pub fn one_receiver() -> (Self, NonNull<Node<T>>) {
+        let null = NodeDataPtr::<T>::null();
+        let node_data = NodeData { ptr: null, connected: true };
         let single_node = Box::new(Node {
-            data: AtomicUsize::new(NodeDataPtr::<T>::null().encode()),
+            data: AtomicUsize::new(node_data.encode()),
             next: AtomicPtr::default(),
             _marker: PhantomData,
         });
