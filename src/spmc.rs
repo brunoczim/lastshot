@@ -2,6 +2,7 @@
 
 mod shared;
 mod sender;
+mod node;
 mod receiver;
 
 pub use receiver::Receiver;

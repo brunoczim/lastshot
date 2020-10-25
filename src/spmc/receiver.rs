@@ -2,7 +2,10 @@
 
 use crate::{
     error::NoSenders,
-    spmc::shared::{Node, NodeDataPtr, ReceiverSubs, Shared},
+    spmc::{
+        node::{Node, NodeDataPtr, ReceiverSubs},
+        shared::Shared,
+    },
 };
 use std::{
     future::Future,

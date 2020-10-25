@@ -2,14 +2,9 @@
 
 use crate::{
     error::NoReceivers,
-    spmc::shared::{
-        Node,
-        NodeData,
-        NodeDataPtr,
-        OrphanData,
-        SenderSubs,
-        Shared,
-        SubsData,
+    spmc::{
+        node::{Node, NodeData, NodeDataPtr, OrphanData, SenderSubs, SubsData},
+        shared::Shared,
     },
 };
 use std::{
@@ -133,14 +128,17 @@ impl<T> Sender<T> {
         let null = NodeDataPtr::<T>::null();
         let node_data = NodeData { ptr: null, connected: true };
         self.front_ref().data.store(node_data.encode(), Release);
+        // We have a contract that says the pointer cannot be null.
         let nonnull = NonNull::new_unchecked(subs_data);
+        // Ok, the contract require the pointer to be valid.
         SenderSubs::from_raw(nonnull).send(message);
     }
 
     /// Sends a message using an orphan node's data pointer. Returns `Ok` if the
-    /// message is sent successfully, wrapping the previous message. Otherwise,
-    /// it returns an error containing the new data pointer stored in the first
-    /// node's data field.
+    /// message is sent successfully, wrapping the previous message, and
+    /// `msg_alloc` is not usable anymore by the caller. Otherwise, it returns
+    /// an error containing the new data pointer stored in the first
+    /// node's data field and `msg_alloc` is usable by the caller.
     ///
     /// # Safety
     /// `expected` must have been loaded from the front's first node data field.
@@ -167,6 +165,9 @@ impl<T> Sender<T> {
 
         match res {
             Ok(_) => Ok(expected.map(|nonnull| {
+                // Checked for null, and the contract requires the pointer to be
+                // loaded from the front, and so it would follow
+                // our invariants.
                 let boxed = Box::from_raw(nonnull.as_ptr());
                 boxed.message
             })),
@@ -192,11 +193,15 @@ impl<T> Sender<T> {
     ) -> Result<Option<T>, NoReceivers<T>> {
         loop {
             if !node_data.connected {
+                // Ok, msg_alloc is only ever used if no operation with it
+                // succeed, and we obtain it from a Box, it should be valid.
                 let msg_box = Box::from_raw(msg_alloc.as_ptr());
                 let message = msg_box.message;
                 let unreceived = self.take_unreceived(node_data.ptr);
                 Err(NoReceivers { attempt: message, unreceived })?
             } else if node_data.ptr.is_null() {
+                // Again, msg_alloc is only ever used if no operation with it
+                // succeed, and we obtain it from a Box, it should be valid.
                 let res = self.send_through_orphan(None, msg_alloc);
                 match res {
                     Ok(nothing) => break Ok(nothing),
@@ -205,6 +210,8 @@ impl<T> Sender<T> {
             } else {
                 match node_data.ptr {
                     NodeDataPtr::Orphan(prev_msg) => {
+                        // We require msg_alloc to be valid, and we only use it
+                        // after this if the result is an error.
                         let res = self.send_through_orphan(
                             NonNull::new(prev_msg),
                             msg_alloc,
@@ -216,6 +223,9 @@ impl<T> Sender<T> {
                     },
 
                     NodeDataPtr::Subs(subs_data) => {
+                        // Ok, msg_alloc must be valid since we need it for
+                        // other calls, such as send_through_orphan (possibly
+                        // called previously).
                         let msg_box = Box::from_raw(msg_alloc.as_ptr());
                         let message = msg_box.message;
                         self.send_through_subs(subs_data, message);
@@ -259,6 +269,7 @@ impl<T> Sender<T> {
                     let null = NodeDataPtr::<T>::null();
                     let node_data = NodeData { ptr: null, connected: false };
                     *self.front_mut().data.get_mut() = node_data.encode();
+                    // We require ptr to be valid through the contract.
                     Some(Box::from_raw(ptr).message)
                 },
             }
@@ -286,7 +297,9 @@ impl<T> Sender<T> {
                 Some(next) => {
                     unsafe {
                         // Safe because we guarantee through the constructor we
-                        // are the only ones with access to it.
+                        // are the only ones with access to it. Front being a
+                        // valid pointer is a basic invariant needed by the
+                        // sender.
                         Box::from_raw(self.front.as_ptr());
                     }
                     self.front = next;
@@ -296,9 +309,146 @@ impl<T> Sender<T> {
         }
     }
 
+    /// Wraps a message in a heap-allocation to an orphan node.
     fn make_orphan(message: T) -> NonNull<OrphanData<T>> {
         let msg_box = Box::new(OrphanData { message });
         NonNull::from(Box::leak(msg_box))
+    }
+
+    /// Warns the receivers that the sender is dropping through a node.
+    /// Essentially, it turns of the connected bit.
+    ///
+    /// # Safety
+    /// Safe only if called in the destructor. More specifically, the sender
+    /// must not be used after this function, except for cleanup. NodeData
+    /// pointer must have been obtained from a node, and must be usable if
+    /// we successefully replace it with a compare_exchange operation.
+    unsafe fn warn_on_node(
+        &mut self,
+        node_data: NodeData<T>,
+    ) -> Result<(), NodeData<T>> {
+        let mut new_node_data =
+            NodeData { connected: false, ptr: node_data.ptr };
+
+        if let NodeDataPtr::Subs(subs_ptr) = node_data.ptr {
+            new_node_data.ptr = NodeDataPtr::null();
+            if let Some(nonnull) = NonNull::new(subs_ptr) {
+                unsafe {
+                    SenderSubs::from_raw(nonnull);
+                }
+            }
+        }
+
+        let res = self.front_ref().data.compare_exchange(
+            node_data.encode(),
+            new_node_data.encode(),
+            AcqRel,
+            Acquire,
+        );
+
+        match res {
+            Ok(_) => Ok(()),
+            Err(update) => Err(NodeData::decode(update)),
+        }
+    }
+
+    /// Clears a node which has been used to warn a receiver. Essentially, this
+    /// takes the sender's handle to a subscriber, if the node data pointer
+    /// points to subscrition data. Also, this will set the front to its next
+    /// node, if any, and it will free the memory of the warned node.
+    ///
+    /// # Safety
+    /// Safe only if called in the destructor. More specifically, the sender
+    /// must not be used after this function, except for cleanup. NodeData
+    /// pointer must have been obtained from a node, and must be owned by this
+    /// function if it is a subscriber data pointer (i.e. subscriber taken from
+    /// the queue).
+    unsafe fn clear_warned_node(&mut self, node_data: NodeData<T>) -> bool {
+        if let NodeDataPtr::Subs(subs_ptr) = node_data.ptr {
+            if let Some(nonnull) = NonNull::new(subs_ptr) {
+                // Ok, we require the node to be valid through the contract.
+                SenderSubs::from_raw(nonnull);
+            }
+        }
+
+        let ptr = self.front_ref().next.load(Acquire);
+        let maybe_next = NonNull::new(ptr);
+        match maybe_next {
+            Some(next) => {
+                // We guarantee by the constructor this is valid, and we
+                // manipulate it so it still valid. Front being a valid pointer
+                // is a basic invariant needed by the sender.
+                Box::from_raw(self.front.as_ptr());
+                self.front = next;
+                true
+            },
+            None => false,
+        }
+    }
+
+    /// Warn receivers that the sender is being dropped, through all necessary
+    /// nodes.
+    ///
+    /// # Safety
+    /// Safe only if called in the destructor. More specifically, the sender
+    /// must not be used after this function, except for cleanup.
+    unsafe fn warn_receivers(&mut self) {
+        let bits = self.front_ref().data.load(Acquire);
+        let mut node_data = NodeData::<T>::decode(bits);
+        while !node_data.connected {
+            let res = self.warn_on_node(node_data);
+
+            match res {
+                Ok(_) => {
+                    if !self.clear_warned_node(node_data) {
+                        break;
+                    }
+                },
+                Err(update) => node_data = update,
+            }
+        }
+    }
+
+    /// Destroy everything in the channel.
+    ///
+    /// # Safety
+    /// Must be called in drop, and only if the receivers have all already
+    /// disconnected. The channel should not be touched at all, as well the
+    /// sender's front pointer.
+    unsafe fn destroy_everything(&mut self) {
+        loop {
+            let bits = self.front_ref().data.load(Acquire);
+            let node_data = NodeData::<T>::decode(bits);
+            match node_data.ptr {
+                NodeDataPtr::Subs(subs_ptr) => {
+                    if let Some(nonnull) = NonNull::new(subs_ptr) {
+                        // This pointer being valid is a basic invariant. Also,
+                        // no one is accessing it after us, we require this
+                        // function to be the last thing executed by the
+                        // channel.
+                        SenderSubs::from_raw(nonnull);
+                    }
+                },
+
+                NodeDataPtr::Orphan(orphan_ptr) => {
+                    if !orphan_ptr.is_null() {
+                        // Ok, we checked for null, and we are the last thing
+                        // executed by the channel.
+                        Box::from_raw(orphan_ptr);
+                    }
+                },
+            }
+
+            // We are the last operation. Front can be freely destroyed even if
+            // this is the last node.
+            let ptr = self.front_ref().next.load(Acquire);
+            Box::from_raw(self.front.as_ptr());
+            let maybe_next = NonNull::new(ptr);
+            match maybe_next {
+                Some(next) => self.front = next,
+                None => break,
+            }
+        }
     }
 }
 
@@ -312,5 +462,15 @@ impl<T> fmt::Debug for Sender<T> {
 }
 
 impl<T> Drop for Sender<T> {
-    fn drop(&mut self) {}
+    fn drop(&mut self) {
+        // Ok, we are on drop and we won't send anything through the channel.
+        unsafe { self.warn_receivers() }
+        // Ok, we are the only sender, signaling once the drop that is
+        // happening.
+        let connected = unsafe { self.shared.drop_sender() };
+        if connected.receivers == 0 {
+            // Ok, we won't touch anything afterm and all receivers dropped.
+            unsafe { self.destroy_everything() }
+        }
+    }
 }

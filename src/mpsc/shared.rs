@@ -12,7 +12,7 @@ use std::{
 
 /// Mask used to select a receiver bit in Connected.
 const RECEIVER_MASK: usize = !SENDERS_MASK;
-///
+
 /// Mask used to select senders bits in Connected.
 const SENDERS_MASK: usize = !0 >> 1;
 
@@ -111,15 +111,14 @@ impl<T> Shared<T> {
     /// Registers a [`Sender`](crate::mpsc::Sender) as dropped. Returns
     /// connected data after accouting the drop.
     pub fn drop_sender(&self) -> Connected {
-        let mut connected =
-            Connected::decode(self.connected.fetch_sub(1, Relaxed));
+        let bits = self.connected.fetch_sub(1, Relaxed);
+        let mut connected = Connected::decode(bits);
         connected.senders -= 1;
         connected
     }
 
     /// Registers the [`Receiver`](crate::mpsc::Receiver) as dropped. Returns
     /// connected data after accouting the drop.
-
     pub fn drop_receiver(&self) -> Connected {
         let bits = self.connected.fetch_and(!RECEIVER_MASK, Relaxed);
         let mut connected = Connected::decode(bits);
