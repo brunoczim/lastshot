@@ -19,6 +19,8 @@ const MESSAGE_BIT: u8 = 1 << 7;
 /// 0100 0000
 const WAKER_BIT: u8 = 1 << 6;
 
+const COUNT_BITS: u8 = !MESSAGE_BIT & !WAKER_BIT;
+
 /// A pointer stored in a node to refer to its data.
 pub enum NodeDataPtr<T> {
     Orphan(*mut OrphanData<T>),
@@ -119,6 +121,14 @@ impl<T> fmt::Debug for NodeData<T> {
     }
 }
 
+#[derive(Debug)]
+pub enum SubsRecv<T> {
+    Subscribed,
+    Received(T),
+    NoSender,
+    Waiting,
+}
+
 /// Subscription data handle owned by the receiver.
 pub struct ReceiverSubs<T> {
     /// The pointer to subscription data.
@@ -147,6 +157,26 @@ impl<T> ReceiverSubs<T> {
         // Safe because we only allocate the pointer through `Box` and never get
         // it from outside.
         unsafe { self.data.as_ref() }
+    }
+
+    pub fn subscribe_or_recv(&self, waker: &task::Waker) -> SubsRecv<T> {
+        let count = self.data().count.load(Relaxed);
+        if count & WAKER_BIT == 0 {
+            unsafe {
+                (*self.data().waker.get()).as_mut_ptr().write(waker.clone());
+            }
+            self.data().count.store(count | WAKER_BIT, Release);
+            SubsRecv::Subscribed
+        } else if count & MESSAGE_BIT != 0 {
+            self.data().count.fetch_and(!MESSAGE_BIT, Release);
+            let message =
+                unsafe { (*self.data().message.get()).as_ptr().read() };
+            SubsRecv::Received(message)
+        } else if count & COUNT_BITS < 2 {
+            SubsRecv::NoSender
+        } else {
+            SubsRecv::Waiting
+        }
     }
 
     /// Creates a sender-owned handle to subscription data.
