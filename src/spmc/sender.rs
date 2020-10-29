@@ -164,13 +164,38 @@ impl<T> Sender<T> {
         );
 
         match res {
-            Ok(_) => Ok(expected.map(|nonnull| {
-                // Checked for null, and the contract requires the pointer to be
-                // loaded from the front, and so it would follow
-                // our invariants.
-                let boxed = Box::from_raw(nonnull.as_ptr());
-                boxed.message
-            })),
+            Ok(_) => match expected {
+                Some(nonnull) => {
+                    // Checked for null, and the contract requires the pointer
+                    // to be loaded from the front, and so
+                    // it would follow our invariants.
+                    let boxed = Box::from_raw(nonnull.as_ptr());
+                    Ok(Some(boxed.message))
+                },
+
+                None => {
+                    if self.front_ref().next.load(Acquire).is_null() {
+                        Ok(None)
+                    } else {
+                        let empty_node_data = NodeData {
+                            connected: true,
+                            ptr: NodeDataPtr::<T>::null(),
+                        };
+                        let res = self.front_ref().data.compare_exchange(
+                            new_node_data.encode(),
+                            empty_node_data.encode(),
+                            AcqRel,
+                            Release,
+                        );
+
+                        match res {
+                            Ok(_) => Err(self.clear_unused_nodes()),
+
+                            Err(_) => Ok(None),
+                        }
+                    }
+                },
+            },
             Err(bits) => Err(NodeData::decode(bits)),
         }
     }
@@ -204,7 +229,12 @@ impl<T> Sender<T> {
                 // succeed, and we obtain it from a Box, it should be valid.
                 let res = self.send_through_orphan(None, msg_alloc);
                 match res {
-                    Ok(nothing) => break Ok(nothing),
+                    Ok(nothing) => {
+                        if self.front_ref().next.load(Relaxed).is_null() {
+                            break Ok(nothing);
+                        }
+                        node_data = self.clear_unused_nodes();
+                    },
                     Err(update) => node_data = update,
                 }
             } else {
@@ -333,9 +363,7 @@ impl<T> Sender<T> {
         if let NodeDataPtr::Subs(subs_ptr) = node_data.ptr {
             new_node_data.ptr = NodeDataPtr::null();
             if let Some(nonnull) = NonNull::new(subs_ptr) {
-                unsafe {
-                    SenderSubs::from_raw(nonnull);
-                }
+                SenderSubs::from_raw(nonnull);
             }
         }
 
@@ -451,6 +479,9 @@ impl<T> Sender<T> {
         }
     }
 }
+
+unsafe impl<T> Send for Sender<T> where T: Send {}
+unsafe impl<T> Sync for Sender<T> where T: Send {}
 
 impl<T> fmt::Debug for Sender<T> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {

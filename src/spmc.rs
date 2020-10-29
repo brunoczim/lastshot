@@ -5,6 +5,9 @@ mod sender;
 mod node;
 mod receiver;
 
+#[cfg(test)]
+mod test;
+
 pub use receiver::Receiver;
 pub use sender::Sender;
 use shared::Shared;

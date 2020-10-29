@@ -46,8 +46,8 @@ impl<T> Receiver<T> {
     /// If there is a message, it returns `Ok(message)`, even if all
     /// [`Sender`](crate::mpsc::Sender)s have disconnected.
     pub async fn recv(&mut self) -> Result<T, NoSenders> {
-        let subscribe = Subscribe { subscribed: false, receiver: self };
-        subscribe.await
+        let subscriber = Subscriber { subscribed: false, receiver: self };
+        subscriber.await
     }
 }
 
@@ -67,12 +67,12 @@ impl<T> Drop for Receiver<T> {
 
 /// A [`Future`] that subscribes [`Future`]s to the channel subscription list.
 #[derive(Debug)]
-struct Subscribe<'receiver, T> {
+struct Subscriber<'receiver, T> {
     subscribed: bool,
     receiver: &'receiver mut Receiver<T>,
 }
 
-impl<'receiver, T> Future for Subscribe<'receiver, T> {
+impl<'receiver, T> Future for Subscriber<'receiver, T> {
     type Output = Result<T, NoSenders>;
 
     fn poll(

@@ -7,6 +7,7 @@ use crate::{
             Node,
             NodeData,
             NodeDataPtr,
+            OrphanData,
             ReceiverSubs,
             SenderSubs,
             SubsRecv,
@@ -50,34 +51,18 @@ impl<T> Receiver<T> {
 
     pub fn try_recv(&self) -> Result<Option<T>, NoSenders> {
         let dummy = Self::make_dummy_node();
-        let back = self.shared.back().swap(dummy.as_ptr(), AcqRel);
+        let back_ptr = self.shared.back().swap(dummy.as_ptr(), AcqRel);
+        let back = unsafe { NonNull::new_unchecked(back_ptr) };
 
-        let bits = unsafe { (*back).data.load(Acquire) };
+        let bits = unsafe { back.as_ref().data.load(Acquire) };
         let node_data = NodeData::decode(bits);
 
         let result = match node_data.ptr {
-            NodeDataPtr::Orphan(orphan_ptr) if !orphan_ptr.is_null() => {
-                let mut new_node_data = NodeData {
-                    connected: node_data.connected,
-                    ptr: NodeDataPtr::<T>::null(),
-                };
-                let res = unsafe {
-                    (*back).data.compare_exchange(
-                        bits,
-                        new_node_data.encode(),
-                        Release,
-                        Relaxed,
-                    )
-                };
-                if res.is_err() {
-                    new_node_data.connected = false;
-                    unsafe {
-                        (*back).data.store(new_node_data.encode(), Release);
-                    }
-                }
-
-                let orphan = unsafe { Box::from_raw(orphan_ptr) };
-                Ok(Some(orphan.message))
+            NodeDataPtr::Orphan(orphan) if !orphan.is_null() => {
+                let orphan = unsafe { NonNull::new_unchecked(orphan) };
+                let message =
+                    unsafe { self.take_orphan(orphan, node_data, back) };
+                Ok(Some(message))
             },
 
             _ => {
@@ -89,7 +74,7 @@ impl<T> Receiver<T> {
             },
         };
 
-        unsafe { self.try_rollback(dummy.as_ptr(), back) }
+        unsafe { self.try_rollback(dummy, back) }
 
         result
     }
@@ -107,21 +92,47 @@ impl<T> Receiver<T> {
 
     unsafe fn try_rollback(
         &self,
-        expected: *mut Node<T>,
-        prev_back: *mut Node<T>,
+        expected: NonNull<Node<T>>,
+        prev_back: NonNull<Node<T>>,
     ) {
-        let res = self
-            .shared
-            .back()
-            .compare_exchange(expected, prev_back, Release, Relaxed);
+        let res = self.shared.back().compare_exchange(
+            expected.as_ptr(),
+            prev_back.as_ptr(),
+            Release,
+            Relaxed,
+        );
 
         match res {
             Ok(_) => {
-                Box::from_raw(expected);
+                Box::from_raw(expected.as_ptr());
             },
 
-            Err(_) => (*prev_back).next.store(expected, Release),
+            Err(_) => prev_back.as_ref().next.store(expected.as_ptr(), Release),
         }
+    }
+
+    unsafe fn take_orphan(
+        &self,
+        orphan: NonNull<OrphanData<T>>,
+        node_data: NodeData<T>,
+        prev_back: NonNull<Node<T>>,
+    ) -> T {
+        let mut new_node_data = NodeData {
+            connected: node_data.connected,
+            ptr: NodeDataPtr::<T>::null(),
+        };
+        let res = prev_back.as_ref().data.compare_exchange(
+            node_data.encode(),
+            new_node_data.encode(),
+            Release,
+            Relaxed,
+        );
+        if res.is_err() {
+            new_node_data.connected = false;
+            prev_back.as_ref().data.store(new_node_data.encode(), Release);
+        }
+
+        Box::from_raw(orphan.as_ptr()).message
     }
 
     fn make_dummy_node() -> NonNull<Node<T>> {
@@ -138,18 +149,14 @@ impl<T> Receiver<T> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum SubsState {
-    TakeOrphan,
-    Subscribe,
-    Done,
-}
+unsafe impl<T> Send for Receiver<T> where T: Send {}
+unsafe impl<T> Sync for Receiver<T> where T: Send {}
 
 struct Subscriber<'receiver, T> {
     receiver: &'receiver mut Receiver<T>,
     node: NonNull<Node<T>>,
     prev_back: NonNull<Node<T>>,
-    state: SubsState,
+    done: bool,
 }
 
 impl<'receiver, T> Subscriber<'receiver, T> {
@@ -158,66 +165,54 @@ impl<'receiver, T> Subscriber<'receiver, T> {
         node: NonNull<Node<T>>,
         prev_back: NonNull<Node<T>>,
     ) -> Self {
-        Self { receiver, node, prev_back, state: SubsState::TakeOrphan }
+        Self { receiver, node, prev_back, done: false }
     }
 
-    unsafe fn take_orphan(&mut self) -> task::Poll<Result<T, NoSenders>> {
-        let bits = self.prev_back.as_ref().data.load(Acquire);
-        let node_data = NodeData::decode(bits);
-        match node_data.ptr {
-            NodeDataPtr::Orphan(orphan_ptr) if !orphan_ptr.is_null() => {
-                let mut new_node_data = NodeData {
-                    connected: node_data.connected,
-                    ptr: NodeDataPtr::<T>::null(),
-                };
-                let res = self.prev_back.as_ref().data.compare_exchange(
-                    bits,
-                    new_node_data.encode(),
-                    Release,
-                    Relaxed,
-                );
-                if res.is_err() {
-                    new_node_data.connected = false;
-                    self.prev_back
-                        .as_ref()
-                        .data
-                        .store(new_node_data.encode(), Release);
-                }
+    unsafe fn post_subscribed(&mut self) -> task::Poll<Result<T, NoSenders>> {
+        let sender_subs = self.receiver.subs.sender_subs();
+        let raw_subs = SenderSubs::into_raw(sender_subs);
+        let expected =
+            NodeData { ptr: NodeDataPtr::<T>::null(), connected: true };
+        let node_data = NodeData {
+            ptr: NodeDataPtr::Subs(raw_subs.as_ptr()),
+            connected: true,
+        };
+        let res = self.prev_back.as_ref().data.compare_exchange(
+            expected.encode(),
+            node_data.encode(),
+            AcqRel,
+            Release,
+        );
 
-                let orphan = Box::from_raw(orphan_ptr);
-                task::Poll::Ready(Ok(orphan.message))
-            },
-
-            _ => {
-                self.state = SubsState::Subscribe;
-                task::Poll::Pending
-            },
-        }
-    }
-
-    unsafe fn subscribe(
-        &mut self,
-        waker: &task::Waker,
-    ) -> task::Poll<Result<T, NoSenders>> {
-        match self.receiver.subs.subscribe_or_recv(waker) {
-            SubsRecv::Subscribed => {
-                let sender_subs = self.receiver.subs.sender_subs();
-                let node_data = NodeData {
-                    ptr: NodeDataPtr::Subs(
-                        SenderSubs::into_raw(sender_subs).as_ptr(),
-                    ),
-                    connected: true,
-                };
-                self.node.as_ref().data.store(node_data.encode(), Release);
+        match res {
+            Ok(_) => {
                 self.prev_back.as_ref().next.store(self.node.as_ptr(), Release);
                 task::Poll::Pending
             },
-            SubsRecv::Waiting => task::Poll::Pending,
-            SubsRecv::NoSender => task::Poll::Ready(Err(NoSenders)),
-            SubsRecv::Received(message) => task::Poll::Ready(Ok(message)),
+
+            Err(bits) => {
+                let found_data = NodeData::<T>::decode(bits);
+                SenderSubs::from_raw(raw_subs);
+                self.receiver.subs.cancel_subs();
+                match node_data.ptr {
+                    NodeDataPtr::Orphan(ptr) if !ptr.is_null() => {
+                        let orphan = NonNull::new_unchecked(ptr);
+                        let message = self.receiver.take_orphan(
+                            orphan,
+                            node_data,
+                            self.prev_back,
+                        );
+                        task::Poll::Ready(Ok(message))
+                    },
+                    _ => task::Poll::Ready(Err(NoSenders)),
+                }
+            },
         }
     }
 }
+
+unsafe impl<'receiver, T> Send for Subscriber<'receiver, T> where T: Send {}
+unsafe impl<'receiver, T> Sync for Subscriber<'receiver, T> where T: Send {}
 
 impl<'receiver, T> Future for Subscriber<'receiver, T> {
     type Output = Result<T, NoSenders>;
@@ -226,17 +221,18 @@ impl<'receiver, T> Future for Subscriber<'receiver, T> {
         mut self: Pin<&mut Self>,
         ctx: &mut task::Context,
     ) -> task::Poll<Self::Output> {
-        let poll = match self.state {
-            SubsState::TakeOrphan => unsafe { self.take_orphan() },
-            SubsState::Subscribe => unsafe { self.subscribe(ctx.waker()) },
-            SubsState::Done => {
-                panic!("spmc::receiver::Subscribe polled after done")
-            },
+        if self.done {
+            panic!("spmc::receiver::Subscribe polled after done")
+        }
+
+        let poll = match self.receiver.subs.subscribe_or_recv(ctx.waker()) {
+            SubsRecv::Subscribed => unsafe { self.post_subscribed() },
+            SubsRecv::Waiting => task::Poll::Pending,
+            SubsRecv::NoSender => task::Poll::Ready(Err(NoSenders)),
+            SubsRecv::Received(message) => task::Poll::Ready(Ok(message)),
         };
 
-        if poll.is_ready() {
-            self.state = SubsState::Done;
-        }
+        self.done = poll.is_ready();
 
         poll
     }

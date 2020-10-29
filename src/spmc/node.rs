@@ -159,7 +159,7 @@ impl<T> ReceiverSubs<T> {
         unsafe { self.data.as_ref() }
     }
 
-    pub fn subscribe_or_recv(&self, waker: &task::Waker) -> SubsRecv<T> {
+    pub fn subscribe_or_recv(&mut self, waker: &task::Waker) -> SubsRecv<T> {
         let count = self.data().count.load(Relaxed);
         if count & WAKER_BIT == 0 {
             unsafe {
@@ -179,11 +179,19 @@ impl<T> ReceiverSubs<T> {
         }
     }
 
+    pub unsafe fn cancel_subs(&mut self) {
+        let bits = self.data().count.swap(1, Release);
+
+        if bits & WAKER_BIT {
+            (*self.data().waker.get()).as_mut_ptr().drop_in_place();
+        }
+    }
+
     /// Creates a sender-owned handle to subscription data.
     ///
     /// # Safety
     /// This is safe if no sender handle to subs data is active.
-    pub unsafe fn sender_subs(&self) -> SenderSubs<T> {
+    pub unsafe fn sender_subs(&mut self) -> SenderSubs<T> {
         self.data().count.fetch_add(1, Acquire);
         SenderSubs { data: self.data }
     }
