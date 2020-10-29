@@ -80,14 +80,7 @@ impl<T> Receiver<T> {
     }
 
     pub async fn recv(&mut self) -> Result<T, NoSenders> {
-        let dummy = Self::make_dummy_node();
-        let back = self.shared.back().swap(dummy.as_ptr(), AcqRel);
-
-        let subscriber = unsafe {
-            Subscriber::new(self, dummy, NonNull::new_unchecked(back))
-        };
-
-        subscriber.await
+        Subscriber::new(self).await
     }
 
     unsafe fn try_rollback(
@@ -152,6 +145,50 @@ impl<T> Receiver<T> {
 unsafe impl<T> Send for Receiver<T> where T: Send {}
 unsafe impl<T> Sync for Receiver<T> where T: Send {}
 
+impl<T> Clone for Receiver<T> {
+    fn clone(&self) -> Self {
+        self.shared.create_receiver();
+        Self { shared: self.shared.clone(), subs: ReceiverSubs::new() }
+    }
+}
+
+impl<T> Drop for Receiver<T> {
+    fn drop(&mut self) {
+        let connection = unsafe { self.shared.drop_receiver() };
+        if connection.receivers == Some(0) {
+            let replacement =
+                NodeData { connected: false, ptr: NodeDataPtr::<T>::null() };
+            let back_ptr = self.shared.back().load(Acquire);
+            let bits =
+                unsafe { (*back_ptr).data.swap(replacement.encode(), AcqRel) };
+            let node_data = NodeData::<T>::decode(bits);
+            match node_data.ptr {
+                NodeDataPtr::Subs(ptr) => {
+                    if let Some(ptr) = NonNull::new(ptr) {
+                        unsafe {
+                            SenderSubs::from_raw(ptr);
+                        }
+                    }
+                },
+
+                NodeDataPtr::Orphan(ptr) => {
+                    if !ptr.is_null() {
+                        unsafe { Box::from_raw(ptr) };
+                    }
+                },
+            }
+
+            let connection = unsafe { self.shared.drop_receivers() };
+
+            if !connection.sender {
+                unsafe {
+                    Box::from_raw(back_ptr);
+                }
+            }
+        }
+    }
+}
+
 struct Subscriber<'receiver, T> {
     receiver: &'receiver mut Receiver<T>,
     node: NonNull<Node<T>>,
@@ -160,12 +197,16 @@ struct Subscriber<'receiver, T> {
 }
 
 impl<'receiver, T> Subscriber<'receiver, T> {
-    unsafe fn new(
-        receiver: &'receiver mut Receiver<T>,
-        node: NonNull<Node<T>>,
-        prev_back: NonNull<Node<T>>,
-    ) -> Self {
-        Self { receiver, node, prev_back, done: false }
+    fn new(receiver: &'receiver mut Receiver<T>) -> Self {
+        let node = Receiver::make_dummy_node();
+        let back = receiver.shared.back().swap(node.as_ptr(), AcqRel);
+
+        Self {
+            receiver,
+            node,
+            prev_back: unsafe { NonNull::new_unchecked(back) },
+            done: false,
+        }
     }
 
     unsafe fn post_subscribed(&mut self) -> task::Poll<Result<T, NoSenders>> {
@@ -194,7 +235,7 @@ impl<'receiver, T> Subscriber<'receiver, T> {
                 let found_data = NodeData::<T>::decode(bits);
                 SenderSubs::from_raw(raw_subs);
                 self.receiver.subs.cancel_subs();
-                match node_data.ptr {
+                match found_data.ptr {
                     NodeDataPtr::Orphan(ptr) if !ptr.is_null() => {
                         let orphan = NonNull::new_unchecked(ptr);
                         let message = self.receiver.take_orphan(

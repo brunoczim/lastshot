@@ -47,7 +47,7 @@ impl<T> Shared<T> {
             _marker: PhantomData,
         });
         let single_node_ptr = NonNull::from(Box::leak(single_node));
-        let connected = Connected { receivers: 1, sender: true };
+        let connected = Connected { receivers: Some(1), sender: true };
         let this = Self {
             back: AtomicPtr::new(single_node_ptr.as_ptr()),
             connected: AtomicUsize::from(connected.encode()),
@@ -61,6 +61,7 @@ impl<T> Shared<T> {
         &self.back
     }
 
+    #[allow(dead_code)]
     /// Returns info about the connection of the
     /// [`Sender`](crate::spmc::Sender) and the
     /// [`Receiver`](crate::spmc::Receiver)s.
@@ -70,10 +71,9 @@ impl<T> Shared<T> {
 
     /// Registers a [`Sender`](crate::spmc::Sender) as created.
     pub fn create_receiver(&self) -> Connected {
-        let bits = self.connected.fetch_add(1, Relaxed);
-        let mut connected = Connected::decode(bits);
-        connected.receivers += 1;
-        connected
+        let mut bits = self.connected.fetch_add(1, Relaxed);
+        bits -= 1;
+        Connected::decode(bits)
     }
 
     /// Registers a [`Receiver`](crate::spmc::Receiver) as dropped. Returns
@@ -83,10 +83,13 @@ impl<T> Shared<T> {
     /// Safe only if called by the sender, only once, and if there is only one
     /// sender.
     pub unsafe fn drop_receiver(&self) -> Connected {
-        let mut connected =
-            Connected::decode(self.connected.fetch_sub(1, Relaxed));
-        connected.receivers -= 1;
-        connected
+        let mut bits = self.connected.fetch_sub(1, Relaxed);
+        bits -= 1;
+        Connected::decode(bits)
+    }
+
+    pub unsafe fn drop_receivers(&self) -> Connected {
+        self.drop_receiver()
     }
 
     /// Registers the [`Sender`](crate::spmc::Sender) as dropped. Returns
@@ -107,7 +110,7 @@ impl<T> Shared<T> {
 #[derive(Debug, Clone, Copy)]
 pub struct Connected {
     /// How many receivers are active.
-    pub receivers: usize,
+    pub receivers: Option<usize>,
     /// Whether the sender is active.
     pub sender: bool,
 }
@@ -117,13 +120,17 @@ impl Connected {
     fn decode(bits: usize) -> Self {
         Self {
             sender: bits & SENDER_MASK != 0,
-            receivers: bits & RECEIVERS_MASK,
+            receivers: (bits & RECEIVERS_MASK).checked_sub(1),
         }
     }
 
     /// Encodes connection info into bits.
     fn encode(self) -> usize {
         let sender = if self.sender { SENDER_MASK } else { 0 };
-        sender | self.receivers
+        let receivers = match self.receivers {
+            Some(count) => count + 1,
+            None => 0,
+        };
+        sender | receivers
     }
 }

@@ -499,7 +499,7 @@ impl<T> Drop for Sender<T> {
         // Ok, we are the only sender, signaling once the drop that is
         // happening.
         let connected = unsafe { self.shared.drop_sender() };
-        if connected.receivers == 0 {
+        if connected.receivers.is_none() {
             // Ok, we won't touch anything afterm and all receivers dropped.
             unsafe { self.destroy_everything() }
         }

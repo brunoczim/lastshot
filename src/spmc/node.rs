@@ -182,7 +182,7 @@ impl<T> ReceiverSubs<T> {
     pub unsafe fn cancel_subs(&mut self) {
         let bits = self.data().count.swap(1, Release);
 
-        if bits & WAKER_BIT {
+        if bits & WAKER_BIT != 0 {
             (*self.data().waker.get()).as_mut_ptr().drop_in_place();
         }
     }

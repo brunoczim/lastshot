@@ -34,6 +34,7 @@ async fn multi_threaded() {
     let (mut sender, mut receiver) = channel::<u32>();
 
     let receiver1_handle = task::spawn({
+        let mut receiver = receiver.clone();
         async move {
             let mut received = false;
             while let Ok(message) = receiver.recv().await {
