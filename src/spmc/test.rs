@@ -11,7 +11,6 @@ async fn single_threaded() {
     sender.send(8).unwrap();
     assert_eq!(receiver.recv().await.unwrap(), 8);
     assert_eq!(receiver.try_recv().unwrap(), None);
-
     let mut receiver2 = receiver.clone();
 
     sender.send(3).unwrap();
@@ -19,6 +18,7 @@ async fn single_threaded() {
 
     sender.send(9).unwrap();
     sender.send(10).unwrap();
+
     assert_eq!(receiver2.recv().await.unwrap(), 10);
     assert_eq!(receiver.try_recv().unwrap(), None);
 
@@ -31,7 +31,7 @@ async fn single_threaded() {
 
 #[tokio::test]
 async fn multi_threaded() {
-    let (mut sender, mut receiver) = channel::<u32>();
+    let (mut sender, receiver) = channel::<u32>();
 
     let receiver1_handle = task::spawn({
         let mut receiver = receiver.clone();
@@ -46,6 +46,7 @@ async fn multi_threaded() {
     });
 
     let receiver2_handle = task::spawn({
+        let mut receiver = receiver.clone();
         async move {
             let mut received = false;
             while let Ok(message) = receiver.recv().await {

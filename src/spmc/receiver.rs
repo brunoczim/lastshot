@@ -214,15 +214,15 @@ impl<'receiver, T> Subscriber<'receiver, T> {
         let raw_subs = SenderSubs::into_raw(sender_subs);
         let expected =
             NodeData { ptr: NodeDataPtr::<T>::null(), connected: true };
-        let node_data = NodeData {
+        let new_node_data = NodeData {
             ptr: NodeDataPtr::Subs(raw_subs.as_ptr()),
             connected: true,
         };
         let res = self.prev_back.as_ref().data.compare_exchange(
             expected.encode(),
-            node_data.encode(),
+            new_node_data.encode(),
             AcqRel,
-            Release,
+            Acquire,
         );
 
         match res {
@@ -232,10 +232,9 @@ impl<'receiver, T> Subscriber<'receiver, T> {
             },
 
             Err(bits) => {
-                let found_data = NodeData::<T>::decode(bits);
-                SenderSubs::from_raw(raw_subs);
+                let node_data = NodeData::<T>::decode(bits);
                 self.receiver.subs.cancel_subs();
-                match found_data.ptr {
+                match node_data.ptr {
                     NodeDataPtr::Orphan(ptr) if !ptr.is_null() => {
                         let orphan = NonNull::new_unchecked(ptr);
                         let message = self.receiver.take_orphan(
@@ -243,6 +242,7 @@ impl<'receiver, T> Subscriber<'receiver, T> {
                             node_data,
                             self.prev_back,
                         );
+                        self.receiver.try_rollback(self.node, self.prev_back);
                         task::Poll::Ready(Ok(message))
                     },
                     _ => task::Poll::Ready(Err(NoSenders)),

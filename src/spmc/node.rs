@@ -94,13 +94,13 @@ impl<T> NodeData<T> {
 
     /// Decodes bits into a node data.
     pub fn decode(bits: usize) -> Self {
-        let connected = bits & 1 == 0;
-        let ptr = if bits & 2 == 0 {
-            NodeDataPtr::Orphan((bits & !3) as *mut _)
-        } else {
+        let connected = bits & 1 != 0;
+        let ptr = if bits & 2 != 0 {
             NodeDataPtr::Subs((bits & !3) as *mut _)
+        } else {
+            NodeDataPtr::Orphan((bits & !3) as *mut _)
         };
-        Self { ptr, connected }
+        Self { connected, ptr }
     }
 }
 
