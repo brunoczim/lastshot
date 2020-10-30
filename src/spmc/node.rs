@@ -320,15 +320,17 @@ impl<T> SubsData<T> {
     /// potentially uninitialized, even if the higher `count` bits are set.
     unsafe fn drop_handle(&self) -> bool {
         let count = self.count.fetch_sub(1, Release);
-        if count & MESSAGE_BIT != 0 {
-            let ptr = self.message.get();
-            (&mut *ptr).as_mut_ptr().drop_in_place();
+        if count & COUNT_BITS == 1 {
+            if count & MESSAGE_BIT != 0 {
+                let ptr = self.message.get();
+                (&mut *ptr).as_mut_ptr().drop_in_place();
+            }
+            if count & WAKER_BIT != 0 {
+                let ptr = self.waker.get();
+                (&mut *ptr).as_mut_ptr().drop_in_place();
+            }
         }
-        if count & WAKER_BIT != 0 {
-            let ptr = self.waker.get();
-            (&mut *ptr).as_mut_ptr().drop_in_place();
-        }
-        count & 1 == 1
+        count & COUNT_BITS == 1
     }
 }
 

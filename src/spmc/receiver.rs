@@ -233,6 +233,7 @@ impl<'receiver, T> Subscriber<'receiver, T> {
 
             Err(bits) => {
                 let node_data = NodeData::<T>::decode(bits);
+                SenderSubs::from_raw(raw_subs);
                 self.receiver.subs.cancel_subs();
                 match node_data.ptr {
                     NodeDataPtr::Orphan(ptr) if !ptr.is_null() => {
