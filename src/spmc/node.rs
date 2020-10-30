@@ -199,9 +199,18 @@ impl<T> ReceiverSubs<T> {
 
 impl<T> Drop for ReceiverSubs<T> {
     fn drop(&mut self) {
-        // Safe because we don't use the contents of the data.
-        unsafe {
-            if self.data().drop_handle() {
+        let count = self.data().count.fetch_sub(1, Release);
+        if count & COUNT_BITS == 1 {
+            if count & MESSAGE_BIT != 0 {
+                let ptr = self.data().message.get();
+                unsafe { (*ptr).as_mut_ptr().drop_in_place() }
+            }
+            if count & WAKER_BIT != 0 {
+                let ptr = self.data().waker.get();
+                unsafe { (*ptr).as_mut_ptr().drop_in_place() }
+            }
+            // Safe because we don't use the contents of the data.
+            unsafe {
                 Box::from_raw(self.data.as_ptr());
             }
         }
@@ -263,9 +272,35 @@ impl<T> SenderSubs<T> {
 
 impl<T> Drop for SenderSubs<T> {
     fn drop(&mut self) {
-        // Safe because we don't use the contents of the data.
-        unsafe {
-            if self.data().drop_handle() {
+        let mut count = self.data().count.load(Acquire);
+        loop {
+            if count & COUNT_BITS == 1 {
+                break;
+            }
+            let new_count = (count & !WAKER_BIT) - 1;
+            let res = self
+                .data()
+                .count
+                .compare_exchange(count, new_count, AcqRel, Acquire);
+            match res {
+                Ok(_) => break,
+                Err(update) => count = update,
+            }
+        }
+
+        if count & WAKER_BIT != 0 {
+            let ptr = self.data().waker.get();
+            let waker = unsafe { (*ptr).as_mut_ptr().read() };
+            waker.wake();
+        }
+
+        if count & COUNT_BITS == 1 {
+            if count & MESSAGE_BIT != 0 {
+                let ptr = self.data().message.get();
+                unsafe { (*ptr).as_mut_ptr().drop_in_place() }
+            }
+            // Safe because we don't use the contents of the data.
+            unsafe {
                 Box::from_raw(self.data.as_ptr());
             }
         }
@@ -309,28 +344,6 @@ impl<T> fmt::Debug for SubsData<T> {
         fmt.debug_struct("SubsData")
             .field("count", &self.count.load(Relaxed))
             .finish()
-    }
-}
-
-impl<T> SubsData<T> {
-    /// Registers a handle as being dropped.
-    ///
-    /// # Safety
-    /// Safe if each handle only calls this method once and does not access the
-    /// potentially uninitialized, even if the higher `count` bits are set.
-    unsafe fn drop_handle(&self) -> bool {
-        let count = self.count.fetch_sub(1, Release);
-        if count & COUNT_BITS == 1 {
-            if count & MESSAGE_BIT != 0 {
-                let ptr = self.message.get();
-                (&mut *ptr).as_mut_ptr().drop_in_place();
-            }
-            if count & WAKER_BIT != 0 {
-                let ptr = self.waker.get();
-                (&mut *ptr).as_mut_ptr().drop_in_place();
-            }
-        }
-        count & COUNT_BITS == 1
     }
 }
 

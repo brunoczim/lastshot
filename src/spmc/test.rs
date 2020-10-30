@@ -62,6 +62,7 @@ async fn multi_threaded() {
             sender.send(i).unwrap();
             task::yield_now().await;
         }
+        println!("AAAAAA");
     });
 
     let (received1, received2, ..) =
